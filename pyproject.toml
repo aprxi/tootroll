@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "tootroll"
 version = "0.1.0"
-description = ""
+description = "Tootroll is a Python package to read timelines from the Mastodon network."
 authors = ["Anthony Potappel <anthonyp@lakeclub.net>"]
 readme = "README.md"
 packages = [
@@ -16,6 +16,8 @@ requests = "^2.28.1"
 [tool.poetry.dev-dependencies]
 pre-commit = "^2.19.0"
 
+[project.urls]
+Homepage = "https://github.com/anthonypotappel/tootroll"
 
 [build-system]
 requires = ["poetry-core"]
