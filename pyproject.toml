@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "tootroll"
+version = "0.1.0"
+description = ""
+authors = ["Anthony Potappel <anthonyp@lakeclub.net>"]
+readme = "README.md"
+packages = [
+    { include = "tootroll", from = "src" },
+    { include = "tootroll/py.typed", from = "src" },
+]
+
+[tool.poetry.dependencies]
+python = "^3.7"
+requests = "^2.28.1"
+
+[tool.poetry.dev-dependencies]
+pre-commit = "^2.19.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
