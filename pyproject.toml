@@ -12,6 +12,7 @@ packages = [
 [tool.poetry.dependencies]
 python = "^3.7"
 requests = "^2.28.1"
+duckdb = "^0.6.0" 
 
 [tool.poetry.dev-dependencies]
 pre-commit = "^2.19.0"

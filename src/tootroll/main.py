@@ -8,6 +8,7 @@ from typing import List, Dict, Any, NoReturn
 from .accounts import profile_update, profile_login, profile_list
 from .timeline import http_get_toots
 from .utils import configure_logger
+from .parquet import timeline_to_parquet
 
 
 class CustomArgParser(argparse.ArgumentParser):
@@ -85,7 +86,7 @@ def cli_main(cli_args: List[str]) -> int:
         http_get_toots(
             f'https://{login["server"]}/api/v1/timelines/public',
             login["access_token"],
-            timeline_to_stdout,
+            timeline_to_parquet,
             max_toots=args.limit,
             url_params={
                 "local": "false",

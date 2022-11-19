@@ -8,7 +8,7 @@ from typing import Dict, List, Optional
 
 from .oauth import verify_credentials, get_access_token
 from .utils import write_secrets_file, read_file
-from .vars import CONFIG_DIR, SECRETS_DIR, DEFAULT_SERVERS
+from .vars import MODULE_DIR, SECRETS_DIR, DEFAULT_SERVERS
 
 
 def profile_save(profile: Dict[str, str], access_token: str) -> int:
@@ -18,7 +18,7 @@ def profile_save(profile: Dict[str, str], access_token: str) -> int:
 
     write_secrets_file(token_file, access_token.encode())
 
-    profile_file = f'{CONFIG_DIR}/{profile["name"]}.profile'
+    profile_file = f'{MODULE_DIR}/{profile["name"]}.profile'
     with open(profile_file, "w") as wfile:
         wfile.write(json.dumps(profile, indent=4, default=str))
     # successfully written files
@@ -26,13 +26,13 @@ def profile_save(profile: Dict[str, str], access_token: str) -> int:
 
 
 def profile_list() -> List[Dict[str, str]]:
-    if os.path.isdir(CONFIG_DIR) is False:
+    if os.path.isdir(MODULE_DIR) is False:
         return []
 
     profiles: List[Dict[str, str]] = list(
         [
-            json.loads(read_file(f"{CONFIG_DIR}/{fn}") or "{}")
-            for fn in os.listdir(CONFIG_DIR)
+            json.loads(read_file(f"{MODULE_DIR}/{fn}") or "{}")
+            for fn in os.listdir(MODULE_DIR)
             if re.match("[-a-zA-Z0-9_]*.profile$", fn)
         ]
     )
@@ -40,7 +40,7 @@ def profile_list() -> List[Dict[str, str]]:
 
 
 def profile_login(name: str) -> Optional[Dict[str, str]]:
-    profile_file = f"{CONFIG_DIR}/{name}.profile"
+    profile_file = f"{MODULE_DIR}/{name}.profile"
     invalid_error = f"Profile '{name}' invalid. Run with '--configure' to update.\n"
 
     try:
