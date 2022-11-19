@@ -3,12 +3,12 @@ Tootroll is a Python package to read timelines from the Mastodon network.
 
 ## Prerequisites
 ### Python
-Python 3.7 or higher is required to run this package. 
+Python 3.7 or higher is required to run this package.
 
 ### Mastodon account (optional)
 To read public timelines an account is not needed.
-  
-A Mastodon account is required to read the Home timeline. 
+
+A Mastodon account is required to read the Home timeline.
 To setup a Mastodon account, visit: [joinmastodon.org](https://joinmastodon.org/).
 
 To acquire a (private) API key ("access token"):
@@ -27,11 +27,11 @@ python -m pip install tootroll
 
 ## Quick setup
 ### Configure public (default) profile
-When installed for the first time, API keys must be configured.  
-To allow easy switching between servers, public/ private APIs the package allows to define multiple named profiles.  
-  
-To setup the default profile, run the following command and follow instructions. 
-Pick a server from the list or set your own (hostname of Mastodon server). 
+When installed for the first time, API keys must be configured.
+To allow easy switching between servers, public/ private APIs the package allows to define multiple named profiles.
+
+To setup the default profile, run the following command and follow instructions.
+Pick a server from the list or set your own (hostname of Mastodon server).
 For the default profile, we recommend to say (N)o when asked for private API key.
 ```
 python -m tootroll --configure
@@ -50,8 +50,8 @@ python -m tootroll --pub --limit 5 |python -m json.tool
 ```
 python -m tootroll --configure --profile myProfile
 ```
-When asked to use private API, type (Y)es.  
-Copy the access token from your Mastodon account.  
+When asked to use private API, type (Y)es.
+Copy the access token from your Mastodon account.
 
 All configuration files are stored under ~/.tootroll.
 

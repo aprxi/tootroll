@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tootroll"
-version = "0.1.1"
+version = "0.1.2"
 description = "Tootroll is a Python package to read timelines from the Mastodon network."
 authors = ["Anthony Potappel <anthonyp@lakeclub.net>"]
 readme = "README.md"

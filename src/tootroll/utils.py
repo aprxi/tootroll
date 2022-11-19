@@ -1,5 +1,28 @@
 import os
+import logging
 from typing import Dict, Optional
+
+
+def configure_logger(name: str, debug: bool = False) -> None:
+
+    _logger = logging.getLogger(name)
+
+    FORMATTER = logging.Formatter(
+        "%(asctime)s - %(name)s:%(lineno)s - %(levelname)s - "
+        "%(funcName)s - %(message)s"
+    )
+    log_handler = logging.StreamHandler()
+    log_handler.setFormatter(FORMATTER)
+
+    # clear any existing handler(s) before adding new
+    for handler in _logger.handlers:
+        _logger.removeHandler(handler)
+    _logger.addHandler(log_handler)
+
+    if debug is True:
+        _logger.setLevel(logging.DEBUG)
+    else:
+        _logger.setLevel(logging.WARNING)
 
 
 def write_secrets_file(filepath: str, contents: bytes) -> None:

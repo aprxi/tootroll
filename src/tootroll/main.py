@@ -1,11 +1,13 @@
+import os
 import sys
 import json
 import argparse
 
-from typing import List, NoReturn
+from typing import List, Dict, Any, NoReturn
 
 from .accounts import profile_update, profile_login, profile_list
-from .timeline import timeline_public, timeline_home, timeline_by_tag
+from .timeline import http_get_toots
+from .utils import configure_logger
 
 
 class CustomArgParser(argparse.ArgumentParser):
@@ -15,9 +17,14 @@ class CustomArgParser(argparse.ArgumentParser):
         sys.exit(2)
 
 
+def timeline_to_stdout(timeline: List[Dict[str, Any]]) -> None:
+    sys.stdout.write(json.dumps(timeline, default=str))
+
+
 def cli_main(cli_args: List[str]) -> int:
 
     module_name = __name__.split(".", 1)[0]
+    configure_logger(name=module_name, debug=(os.environ.get("DEBUG", "") != ""))
     parser = CustomArgParser(prog=module_name)
 
     group = parser.add_mutually_exclusive_group(required=False)
@@ -69,13 +76,21 @@ def cli_main(cli_args: List[str]) -> int:
     args = parser.parse_args(args=cli_args)
 
     if args.pub:
+
         login = profile_login(args.profile)
         if login is None:
             sys.stderr.write(f"Cant get access token for profile: {args.profile}\n")
             return 1
 
-        timeline = timeline_public(login, max_toots=args.limit)
-        sys.stdout.write(json.dumps(timeline, default=str))
+        http_get_toots(
+            f'https://{login["server"]}/api/v1/timelines/public',
+            login["access_token"],
+            timeline_to_stdout,
+            max_toots=args.limit,
+            url_params={
+                "local": "false",
+            },
+        )
         return 0
 
     elif args.home:
@@ -84,8 +99,12 @@ def cli_main(cli_args: List[str]) -> int:
             sys.stderr.write(f"Cant get access token for profile: {args.profile}\n")
             return 1
 
-        timeline = timeline_home(login, max_toots=args.limit)
-        sys.stdout.write(json.dumps(timeline, default=str))
+        http_get_toots(
+            f'https://{login["server"]}/api/v1/timelines/home',
+            login["access_token"],
+            timeline_to_stdout,
+            max_toots=args.limit,
+        )
         return 0
 
     elif args.tags:
@@ -95,10 +114,13 @@ def cli_main(cli_args: List[str]) -> int:
             return 1
 
         tags = args.tags.split(",")
-        timeline = []
         for tag in tags:
-            timeline += timeline_by_tag(login=login, tag=tag, max_toots=args.limit)
-        sys.stdout.write(json.dumps(timeline, default=str))
+            http_get_toots(
+                f'https://{login["server"]}/api/v1/timelines/tag/{tag}',
+                login["access_token"],
+                timeline_to_stdout,
+                max_toots=args.limit,
+            )
         return 0
 
     elif args.configure:
