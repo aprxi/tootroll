@@ -8,7 +8,7 @@ from typing import List, Dict, Any, NoReturn
 from .accounts import profile_update, profile_login, profile_list
 from .timeline import http_get_toots
 from .utils import configure_logger
-from .parquet import timeline_to_parquet
+from .parquet import timeline_to_parquet, read_parquet
 
 
 class CustomArgParser(argparse.ArgumentParser):
@@ -66,6 +66,13 @@ def cli_main(cli_args: List[str]) -> int:
         help="Select a profile to use. If left empty, lists configured profiles",
     )
     parser.add_argument(
+        "-u",
+        "--update",
+        action="store_true",
+        default=False,
+        help="Get latest data",
+    )
+    parser.add_argument(
         "-l",
         "--limit",
         action="store",
@@ -83,15 +90,17 @@ def cli_main(cli_args: List[str]) -> int:
             sys.stderr.write(f"Cant get access token for profile: {args.profile}\n")
             return 1
 
-        http_get_toots(
-            f'https://{login["server"]}/api/v1/timelines/public',
-            login["access_token"],
-            timeline_to_parquet,
-            max_toots=args.limit,
-            url_params={
-                "local": "false",
-            },
-        )
+        if args.update:
+            http_get_toots(
+                f'https://{login["server"]}/api/v1/timelines/public',
+                login["access_token"],
+                timeline_to_parquet,
+                max_toots=args.limit,
+                url_params={
+                    "local": "false",
+                },
+            )
+        read_parquet(args.limit)
         return 0
 
     elif args.home:

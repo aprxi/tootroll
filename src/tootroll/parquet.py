@@ -1,9 +1,8 @@
 import os
-import json
 import duckdb
 
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Tuple, Dict, Any
 
 from .vars import DATABASE_DIR
 
@@ -27,34 +26,47 @@ TYPE_CONVERSIONS = {
     str: "VARCHAR",
 }
 
+
+def read_parquet_metadata(database_file: str) -> None:
+    con = duckdb.connect(database=database_file)
+    con.execute(f"DESCRIBE SELECT * FROM parquet_metadata('{database_file}');")
+    print( con.fetchall() )
+
+
+def read_parquet(limit: int) -> None:
+    database_file = f"{DATABASE_DIR}/db.parquet"
+    con = duckdb.connect(database=database_file)
+
+    # retrieve the items again
+    # con.execute(f"SELECT * FROM items ORDER BY created_at DESC LIMIT {limit}")
+    con.execute(f"SELECT * FROM items LIMIT {limit}")
+    items = con.fetchall()
+    for item in items:
+        print(datetime.fromtimestamp(item[1]), item)
+    print(f"Total items={len(items)},unique={len(set(items))}")
+
+    # read_parquet_metadata( database_file)
+    # print(datetime.fromtimestamp(item[1]), item)
+
+
 def timeline_to_parquet(timeline: List[Dict[str, Any]]) -> None:
 
-    toots = []
+    toots: List[Tuple] = []
     for post in timeline:
         toots.append(tuple(v(post[k]) for k, v in TIMELINE_KEYS.items()))
 
     if len(toots) < 1:
         return
-    table_items = ", ".join(tuple(f"{key} {TYPE_CONVERSIONS[type(toots[0][idx])]}" for idx, key in enumerate( list(TIMELINE_KEYS.keys()))))
 
     database_file = f"{DATABASE_DIR}/db.parquet"
     if not os.path.exists(database_file):
         os.makedirs(DATABASE_DIR, exist_ok=True)
         con = duckdb.connect(database=database_file)
+        table_items = ", ".join(tuple(f"{key} {TYPE_CONVERSIONS[type(toots[0][idx])]}" for idx, key in enumerate( list(TIMELINE_KEYS.keys()))))
         con.execute(f"CREATE TABLE items({table_items})")
-        con.executemany("INSERT INTO items VALUES (?, ?, ?, ?, ?, ?)", toots )
     else:
         con = duckdb.connect(database=database_file)
 
-    # retrieve the items again
-    con.execute("SELECT * FROM items")
-    for item in con.fetchall():
-        print(datetime.fromtimestamp(item[1]), item)
+    toots_sorted = sorted(toots, key = lambda t: t[1], reverse=False)
 
-    # con.execute("COPY (SELECT * FROM items) TO 'result-snappy.parquet' (FORMAT 'parquet')")
-
-    # con.execute("EXPORT DATABASE 'target_directory' (FORMAT PARQUET)")
-    # print( timeline[0].keys() )
-    # print('#'*50)
-    # del timeline[0]["account"]
-    # print(json.dumps(timeline, indent=4, default=str))
+    con.executemany("INSERT INTO items VALUES (?, ?, ?, ?, ?, ?)", toots_sorted)
