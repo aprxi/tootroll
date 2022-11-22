@@ -2,7 +2,7 @@ import os
 import duckdb
 
 from datetime import datetime
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple, Dict, Any, Optional
 
 from .vars import DATABASE_DIR
 
@@ -33,20 +33,34 @@ def read_parquet_metadata(database_file: str) -> None:
     print( con.fetchall() )
 
 
+def timeline_last_id(database_file: str) -> Optional[int]:
+    if not os.path.exists(database_file):
+        return None
+    con = duckdb.connect(database=database_file)
+    try:
+        con.execute(f"SELECT id FROM items ORDER BY id DESC LIMIT 1")
+        items = con.fetchall()
+        if len(items) < 1:
+            return None
+        return int(items[0][0])
+    except:
+        print("ERROR")
+        return None
+
 def read_parquet(limit: int) -> None:
     database_file = f"{DATABASE_DIR}/db.parquet"
+
+    # return
     con = duckdb.connect(database=database_file)
 
     # retrieve the items again
-    # con.execute(f"SELECT * FROM items ORDER BY created_at DESC LIMIT {limit}")
-    con.execute(f"SELECT * FROM items LIMIT {limit}")
+    con.execute(f"SELECT * FROM items ORDER BY created_at DESC LIMIT {limit}")
     items = con.fetchall()
     for item in items:
+        # print(item)
         print(datetime.fromtimestamp(item[1]), item)
     print(f"Total items={len(items)},unique={len(set(items))}")
 
-    # read_parquet_metadata( database_file)
-    # print(datetime.fromtimestamp(item[1]), item)
 
 
 def timeline_to_parquet(timeline: List[Dict[str, Any]]) -> None:
@@ -67,6 +81,4 @@ def timeline_to_parquet(timeline: List[Dict[str, Any]]) -> None:
     else:
         con = duckdb.connect(database=database_file)
 
-    toots_sorted = sorted(toots, key = lambda t: t[1], reverse=False)
-
-    con.executemany("INSERT INTO items VALUES (?, ?, ?, ?, ?, ?)", toots_sorted)
+    con.executemany("INSERT INTO items VALUES (?, ?, ?, ?, ?, ?)", toots)

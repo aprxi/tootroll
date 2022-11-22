@@ -1,3 +1,4 @@
+import re
 import sys
 import json
 import logging
@@ -14,6 +15,7 @@ logger = logging.getLogger(__name__)
 # default number of toots per HTTP request
 # note: most servers apply max limit of 40
 TOOTS_PER_REQUEST = 40
+
 
 
 def calculate_request_limits(max_toots: int) -> Tuple[int, int]:
@@ -49,7 +51,7 @@ def http_get_toots(
     param_str = "&".join([f"{key}={value}" for key, value in url_params.items()])
     link = f"{url_base}?{param_str}"
 
-    link_history: List[str] = []
+    # link_history: List[str] = []
 
     rate_limit_remaining = 300  # initially assume default
 
@@ -71,21 +73,27 @@ def http_get_toots(
             f"rate_limit_remaining={rate_limit_remaining},request_limit={request_limit}"
         )
 
-        link_history.append(link)
         try:
             toots: List[Dict[str, Any]] = json.loads(response.content)
         except JSONDecodeError:
             sys.stderr.write(f"Cant parse response content:{response.content}")
             break
 
-        write_callback(toots)
+        if len(toots) < 1:
+            logger.debug("No more toots received")
+            break
+        else:
+            logger.debug(f"Received {len(toots)} toots")
+        toots_sorted = sorted(toots, key = lambda t: t["id"], reverse=False)
+        write_callback(toots_sorted)
+
+        url_params["min_id"] = str(toots[0]["id"])
 
         next_link = response.headers.get("Link", "").split(";", 1)[0].strip("<>")
-        if not next_link:
-            # no more links to follow
+        max_id_search = re.search("max_id=[0-9]*", next_link)
+        if not max_id_search:
             break
-        if next_link in link_history:
-            # break on repeat
-            break
-        # continue
-        link = next_link
+        # url_params["max_id"] = re.search("max_id=[0-9]*", next_link).group().split("=", 1)[-1]
+
+        param_str = "&".join([f"{key}={value}" for key, value in url_params.items()])
+        link = f"{url_base}?{param_str}"

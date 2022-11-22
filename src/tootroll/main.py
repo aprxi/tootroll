@@ -8,7 +8,9 @@ from typing import List, Dict, Any, NoReturn
 from .accounts import profile_update, profile_login, profile_list
 from .timeline import http_get_toots
 from .utils import configure_logger
-from .parquet import timeline_to_parquet, read_parquet
+from .parquet import timeline_to_parquet, read_parquet, timeline_last_id
+
+from .vars import DATABASE_DIR
 
 
 class CustomArgParser(argparse.ArgumentParser):
@@ -90,15 +92,24 @@ def cli_main(cli_args: List[str]) -> int:
             sys.stderr.write(f"Cant get access token for profile: {args.profile}\n")
             return 1
 
+        database_file = f"{DATABASE_DIR}/db.parquet"
+
         if args.update:
+            url_params = {
+                "local": "false",
+            }
+            last_id = timeline_last_id(database_file=database_file)
+            if last_id:
+                url_params["min_id"] = str(last_id)
+
+            base_link = f'https://{login["server"]}/api/v1/timelines/public'
+
             http_get_toots(
-                f'https://{login["server"]}/api/v1/timelines/public',
+                base_link,
                 login["access_token"],
                 timeline_to_parquet,
                 max_toots=args.limit,
-                url_params={
-                    "local": "false",
-                },
+                url_params=url_params,
             )
         read_parquet(args.limit)
         return 0
