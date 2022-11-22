@@ -33,24 +33,24 @@ def read_parquet_metadata(database_file: str) -> None:
     print( con.fetchall() )
 
 
-def timeline_last_id(database_file: str) -> Optional[int]:
+def timeline_last_id(database_name: str) -> Optional[int]:
+    database_file = f"{DATABASE_DIR}/{database_name}.parquet"
     if not os.path.exists(database_file):
         return None
-    con = duckdb.connect(database=database_file)
     try:
+        con = duckdb.connect(database=database_file)
         con.execute(f"SELECT id FROM items ORDER BY id DESC LIMIT 1")
-        items = con.fetchall()
-        if len(items) < 1:
+        item = con.fetchone()
+        if not item or len(item) < 1:
             return None
-        return int(items[0][0])
-    except:
-        print("ERROR")
+        return int(item[0])
+    except ValueError:
         return None
 
-def read_parquet(limit: int) -> None:
-    database_file = f"{DATABASE_DIR}/db.parquet"
 
-    # return
+def read_parquet(database_name: str, limit: int) -> None:
+    database_file = f"{DATABASE_DIR}/{database_name}.parquet"
+
     con = duckdb.connect(database=database_file)
 
     # retrieve the items again
@@ -63,7 +63,7 @@ def read_parquet(limit: int) -> None:
 
 
 
-def timeline_to_parquet(timeline: List[Dict[str, Any]]) -> None:
+def timeline_to_parquet(keyname: str, timeline: List[Dict[str, Any]]) -> None:
 
     toots: List[Tuple] = []
     for post in timeline:
@@ -72,7 +72,7 @@ def timeline_to_parquet(timeline: List[Dict[str, Any]]) -> None:
     if len(toots) < 1:
         return
 
-    database_file = f"{DATABASE_DIR}/db.parquet"
+    database_file = f"{DATABASE_DIR}/{keyname}.parquet"
     if not os.path.exists(database_file):
         os.makedirs(DATABASE_DIR, exist_ok=True)
         con = duckdb.connect(database=database_file)

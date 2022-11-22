@@ -8,7 +8,7 @@ from json.decoder import JSONDecodeError
 from typing import Dict, List, Tuple, Callable, Any
 
 from .oauth import check_rate_limits
-
+from .vars import url_to_keyname
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ def calculate_request_limits(max_toots: int) -> Tuple[int, int]:
 def http_get_toots(
     url_base: str,
     access_token: str,
-    write_callback: Callable[[List[Dict[str, Any]]], None],
+    write_callback: Callable[[str, List[Dict[str, Any]]], None],
     max_toots: int = 1,
     url_params: Dict[str, str] = {},
 ) -> None:
@@ -51,9 +51,8 @@ def http_get_toots(
     param_str = "&".join([f"{key}={value}" for key, value in url_params.items()])
     link = f"{url_base}?{param_str}"
 
-    # link_history: List[str] = []
-
     rate_limit_remaining = 300  # initially assume default
+    keyname = url_to_keyname(url_base)
 
     while rate_limit_remaining > 0 and request_limit > 0:
         request_limit -= 1
@@ -85,7 +84,7 @@ def http_get_toots(
         else:
             logger.debug(f"Received {len(toots)} toots")
         toots_sorted = sorted(toots, key = lambda t: t["id"], reverse=False)
-        write_callback(toots_sorted)
+        write_callback(keyname, toots_sorted)
 
         url_params["min_id"] = str(toots[0]["id"])
 

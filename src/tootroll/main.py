@@ -9,9 +9,7 @@ from .accounts import profile_update, profile_login, profile_list
 from .timeline import http_get_toots
 from .utils import configure_logger
 from .parquet import timeline_to_parquet, read_parquet, timeline_last_id
-
-from .vars import DATABASE_DIR
-
+from .vars import url_to_keyname
 
 class CustomArgParser(argparse.ArgumentParser):
     def error(self, message: str) -> NoReturn:
@@ -20,7 +18,7 @@ class CustomArgParser(argparse.ArgumentParser):
         sys.exit(2)
 
 
-def timeline_to_stdout(timeline: List[Dict[str, Any]]) -> None:
+def timeline_to_stdout(keyname: str, timeline: List[Dict[str, Any]]) -> None:
     sys.stdout.write(json.dumps(timeline, default=str))
 
 
@@ -92,26 +90,26 @@ def cli_main(cli_args: List[str]) -> int:
             sys.stderr.write(f"Cant get access token for profile: {args.profile}\n")
             return 1
 
-        database_file = f"{DATABASE_DIR}/db.parquet"
-
         if args.update:
+
+            base_url = f'https://{login["server"]}/api/v1/timelines/public'
+            database_name = url_to_keyname(base_url)
+            last_id = timeline_last_id(database_name=database_name)
+
             url_params = {
                 "local": "false",
             }
-            last_id = timeline_last_id(database_file=database_file)
             if last_id:
                 url_params["min_id"] = str(last_id)
 
-            base_link = f'https://{login["server"]}/api/v1/timelines/public'
-
             http_get_toots(
-                base_link,
+                base_url,
                 login["access_token"],
                 timeline_to_parquet,
                 max_toots=args.limit,
                 url_params=url_params,
             )
-        read_parquet(args.limit)
+        read_parquet(database_name, args.limit)
         return 0
 
     elif args.home:

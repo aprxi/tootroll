@@ -1,4 +1,5 @@
 import os
+import re
 
 MODULE_NAME = __name__.split(".", 1)[0]
 
@@ -10,3 +11,7 @@ DEFAULT_SERVERS = [
     "mastodon.online",
     "fosstodon.org",
 ]
+
+
+url_to_keyname = lambda url: \
+    f'{re.sub("/", "-", re.sub(".*://|/api/v[0-9]*/", "_", url).strip("_"))}'
