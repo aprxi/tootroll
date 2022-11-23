@@ -11,6 +11,7 @@ from .utils import configure_logger
 from .parquet import read_parquet, ParquetWriter
 from .vars import url_to_keyname
 
+
 class CustomArgParser(argparse.ArgumentParser):
     def error(self, message: str) -> NoReturn:
         sys.stderr.write(f"error: {message}\n")
@@ -36,7 +37,13 @@ class StdoutWriter:
         pass
 
 
-def get_toots(base_url: str, access_token: str, update_type: Optional[str], limit: int, print_stdout: bool = False) -> int:
+def get_toots(
+    base_url: str,
+    access_token: str,
+    update_type: Optional[str],
+    limit: int,
+    print_stdout: bool = False,
+) -> int:
     database_name = url_to_keyname(base_url)
 
     if update_type:
@@ -53,7 +60,10 @@ def get_toots(base_url: str, access_token: str, update_type: Optional[str], limi
             # default is to get latest
             pass
         else:
-            sys.stderr.write(f"Unknown update option: '{update_type}', choose between: ['latest', 'fill']\n")
+            sys.stderr.write(
+                f"Unknown update option: '{update_type}',\
+valid choices: ['latest', 'fill']\n"
+            )
             return 1
 
         http_get_toots(
@@ -144,7 +154,13 @@ def cli_main(cli_args: List[str]) -> int:
             sys.stderr.write(f"Cant get access token for profile: {args.profile}\n")
             return 1
         base_url = f'https://{login["server"]}/api/v1/timelines/public'
-        return get_toots(base_url, login["access_token"], args.update, args.limit, print_stdout=args.print)
+        return get_toots(
+            base_url,
+            login["access_token"],
+            args.update,
+            args.limit,
+            print_stdout=args.print,
+        )
 
     elif args.home:
         login = profile_login(args.profile)
@@ -153,7 +169,13 @@ def cli_main(cli_args: List[str]) -> int:
             return 1
 
         base_url = f'https://{login["server"]}/api/v1/timelines/home'
-        return get_toots(base_url, login["access_token"], args.update, args.limit, print_stdout=args.print)
+        return get_toots(
+            base_url,
+            login["access_token"],
+            args.update,
+            args.limit,
+            print_stdout=args.print,
+        )
 
     elif args.tags:
         login = profile_login(args.profile)

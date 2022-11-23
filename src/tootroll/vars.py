@@ -13,5 +13,5 @@ DEFAULT_SERVERS = [
 ]
 
 
-url_to_keyname = lambda url: \
-    f'{re.sub("/", "-", re.sub(".*://|/api/v[0-9]*/", "_", url).strip("_"))}'
+def url_to_keyname(url: str) -> str:
+    return re.sub("/", "-", re.sub(".*://|/api/v[0-9]*/", "_", url).strip("_"))

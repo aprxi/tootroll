@@ -1,5 +1,7 @@
 import os
 import logging
+from datetime import datetime
+
 from typing import Dict, Optional
 
 
@@ -45,3 +47,8 @@ def read_file(filepath: str) -> Optional[str]:
 
 def lower_dict_keys(input_dict: Dict[str, str]) -> Dict[str, str]:
     return dict((k.lower(), v) for k, v in input_dict.items())
+
+
+def iso8601_to_timestamp(input_str: str) -> int:
+    date_str, _ = input_str.split(".", 1)  # for now, ignore timezone
+    return int(datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%S").timestamp())

@@ -5,31 +5,16 @@ import logging
 import duckdb
 
 from datetime import datetime
-from typing import List, Tuple, Dict, Any, Optional
+from typing import List, Tuple, Dict, Union, Any, Optional
 
+from .timeline import TIMELINE_FUNCTIONS
 from .vars import DATABASE_DIR
 
 logger = logging.getLogger(__name__)
 
 
-def iso8601_to_timestamp(input_str: str) -> int:
-    date_str, _ = input_str.split(".", 1)   # for now, ignore timezone
-    return int(datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%S").timestamp())
-
-
-TIMELINE_KEYS = {
-    "id": int,
-    "created_at": iso8601_to_timestamp,
-    "url": str,
-    "replies_count": int,
-    "reblogs_count": int,
-    "favourites_count": int,
-    "content": str,
-}
-
 TYPE_CONVERSIONS = {
     int: "INT64",
-    iso8601_to_timestamp: "INT64",
     str: "VARCHAR",
 }
 
@@ -37,7 +22,7 @@ TYPE_CONVERSIONS = {
 def read_parquet_metadata(database_file: str) -> None:
     con = duckdb.connect(database=database_file)
     con.execute(f"DESCRIBE SELECT * FROM parquet_metadata('{database_file}');")
-    print( con.fetchall() )
+    print(con.fetchall())
 
 
 def read_parquet(database_name: str, limit: int) -> None:
@@ -59,13 +44,20 @@ def read_parquet(database_name: str, limit: int) -> None:
             raise error
 
 
+def func_to_type(func: Any) -> Any:
+    return (
+        TYPE_CONVERSIONS.get(func, None)
+        or TYPE_CONVERSIONS[func.__annotations__["return"]]
+    )
+
+
 class ParquetWriter:
     def __init__(
         self,
         database_name: str,
         limit: int,
     ) -> None:
-        self.last_ids = []
+        self.last_ids: List[int] = []
         database_file = f"{DATABASE_DIR}/{database_name}.parquet"
         if not os.path.exists(database_file):
             os.makedirs(DATABASE_DIR, exist_ok=True)
@@ -76,19 +68,25 @@ class ParquetWriter:
             limit = 2000
             self.last_ids = self.get_last_ids(limit=limit) or self.last_ids
 
-    def create_table(self) -> None:       
+    def create_table(self) -> None:
+
         table_items = ", ".join(
             tuple(
-                f"{key} {TYPE_CONVERSIONS[func]}"
-                for key, func in TIMELINE_KEYS.items()
-            ))
+                f"{key} {func_to_type(func)}"
+                for key, func in TIMELINE_FUNCTIONS.items()
+            )
+        )
         self.con.execute(f"CREATE TABLE items({table_items})")
 
-    def get_last_ids(self, limit: int = 1, max_id: Optional[int] = None) -> Optional[List[int]]:
+    def get_last_ids(
+        self, limit: int = 1, max_id: Optional[int] = None
+    ) -> Optional[List[int]]:
         if max_id:
-            base_query = f"SELECT distinct(id) FROM items WHERE id < {max_id} ORDER BY id DESC"
+            base_query = (
+                f"SELECT distinct(id) FROM items WHERE id < {max_id} ORDER BY id DESC"
+            )
         else:
-            base_query = f"SELECT distinct(id) FROM items ORDER BY id DESC"
+            base_query = "SELECT distinct(id) FROM items ORDER BY id DESC"
 
         try:
             self.con.execute(f"{base_query} LIMIT {limit}")
@@ -104,15 +102,13 @@ class ParquetWriter:
         timeline: List[Dict[str, Any]],
     ) -> int:
 
-        toots: List[Tuple] = []
+        toots: List[Tuple[Union[str, int, bool]]] = []
         for post in timeline:
             post_id = int(post["id"])
             if post_id in self.last_ids:
                 pass
             else:
-                toots.append(
-                    tuple(v(post[k]) for k, v in TIMELINE_KEYS.items())
-                )
+                toots.append(tuple(v(post[k]) for k, v in TIMELINE_FUNCTIONS.items()))
                 self.last_ids.append(post_id)
 
         if len(toots) < 1:

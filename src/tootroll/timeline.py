@@ -5,10 +5,10 @@ import logging
 import requests  # type: ignore
 
 from json.decoder import JSONDecodeError
-from typing import Dict, List, Tuple, Callable, Any
+from typing import Dict, List, Tuple, Any
 
 from .oauth import check_rate_limits
-from .vars import url_to_keyname
+from .utils import iso8601_to_timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +16,26 @@ logger = logging.getLogger(__name__)
 # note: most servers apply max limit of 40
 TOOTS_PER_REQUEST = 40
 
+# TIMELINE_FUNCTIONS = {
+#     "id": int,
+#     "created_at": iso8601_to_timestamp,
+#     "reblog_created_at": iso8601_to_timestamp,
+#     "is_reblog": bool,
+#     "url": str,
+#     "replies_count": int,
+#     "reblogs_count": int,
+#     "favourites_count": int,
+#     "content": str,
+# }
+TIMELINE_FUNCTIONS = {
+    "id": int,
+    "created_at": iso8601_to_timestamp,
+    "url": str,
+    "replies_count": int,
+    "reblogs_count": int,
+    "favourites_count": int,
+    "content": str,
+}
 
 
 def calculate_request_limits(max_toots: int) -> Tuple[int, int]:
@@ -33,15 +53,17 @@ def calculate_request_limits(max_toots: int) -> Tuple[int, int]:
     return toot_limit, request_limit
 
 
+# def parse_toot_reblog(toot: Dict[str, Any]) -> Dict[str, Union[int, str, bool]]:
+# def parse_toot_regular(toot: Dict[str, Any]) -> Dict[str, Union[int, str, bool]]:
+
+
 def http_get_toots(
     url_base: str,
     access_token: str,
-    writer,
+    writer: Any,
     max_toots: int = 1,
     url_params: Dict[str, str] = {},
 ) -> None:
-
-    print( writer )
 
     toot_limit, request_limit = calculate_request_limits(max_toots)
     url_params.update(
@@ -54,7 +76,6 @@ def http_get_toots(
     link = f"{url_base}?{param_str}"
 
     rate_limit_remaining = 300  # initially assume default
-    # keyname = url_to_keyname(url_base)
 
     while rate_limit_remaining > 0 and request_limit > 0:
         request_limit -= 1
@@ -85,13 +106,8 @@ def http_get_toots(
         if len(toots) < 1:
             break
 
-        toots_validated = [
-            t for t in toots
-            if t["url"] and t["content"]
-        ]
-        toots_sorted = sorted(toots_validated, key = lambda t: t["id"], reverse=False)
-        # for toot in toots_sorted[0:5]:
-        #     print(json.dumps(toot, indent=4, default=str))
+        toots_validated = [t for t in toots if t["url"] and t["content"]]
+        toots_sorted = sorted(toots_validated, key=lambda t: t["id"], reverse=False)
         toots_added = writer.add_toots(toots_sorted)
 
         if len(toots) < TOOTS_PER_REQUEST or toots_added < len(toots_validated):
@@ -104,10 +120,11 @@ def http_get_toots(
         max_id_search = re.search("max_id=[0-9]*", next_link)
         if not max_id_search:
             break
-        url_params["max_id"] = re.search("max_id=[0-9]*", next_link).group().split("=", 1)[-1]
+        url_params["max_id"] = (
+            re.search("max_id=[0-9]*", next_link).group().split("=", 1)[-1]
+        )
 
         param_str = "&".join([f"{key}={value}" for key, value in url_params.items()])
         link = f"{url_base}?{param_str}"
-
 
     writer.close()
