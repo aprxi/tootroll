@@ -3,12 +3,12 @@ import sys
 import json
 import argparse
 
-from typing import List, Dict, Any, NoReturn
+from typing import List, Dict, Any, NoReturn, Optional
 
 from .accounts import profile_update, profile_login, profile_list
 from .timeline import http_get_toots
 from .utils import configure_logger
-from .parquet import timeline_to_parquet, read_parquet, timeline_last_id
+from .parquet import read_parquet, ParquetWriter
 from .vars import url_to_keyname
 
 class CustomArgParser(argparse.ArgumentParser):
@@ -18,8 +18,54 @@ class CustomArgParser(argparse.ArgumentParser):
         sys.exit(2)
 
 
-def timeline_to_stdout(keyname: str, timeline: List[Dict[str, Any]]) -> None:
-    sys.stdout.write(json.dumps(timeline, default=str))
+class StdoutWriter:
+    def __init__(
+        self,
+        name: str,
+    ) -> None:
+        pass
+
+    def add_toots(
+        self,
+        timeline: List[Dict[str, Any]],
+    ) -> int:
+        sys.stdout.write(json.dumps(timeline, default=str))
+        return len(timeline)
+
+    def close(self) -> None:
+        pass
+
+
+def get_toots(base_url: str, access_token: str, update_type: Optional[str], limit: int, print_stdout: bool = False) -> int:
+    database_name = url_to_keyname(base_url)
+
+    if update_type:
+        url_params = {
+            "local": "false",
+        }
+
+        writer = ParquetWriter(database_name, limit)
+        if update_type == "fill":
+            last_id = writer.get_last_ids(limit=1)
+            if last_id:
+                url_params["min_id"] = str(last_id[0])
+        elif update_type == "latest":
+            # default is to get latest
+            pass
+        else:
+            sys.stderr.write(f"Unknown update option: '{update_type}', choose between: ['latest', 'fill']\n")
+            return 1
+
+        http_get_toots(
+            base_url,
+            access_token,
+            writer,
+            max_toots=limit,
+            url_params=url_params,
+        )
+    if print_stdout:
+        read_parquet(database_name, limit)
+    return 0
 
 
 def cli_main(cli_args: List[str]) -> int:
@@ -68,49 +114,37 @@ def cli_main(cli_args: List[str]) -> int:
     parser.add_argument(
         "-u",
         "--update",
+        action="store",
+        nargs="?",
+        const="latest",
+        help="Get latest data",
+    )
+    parser.add_argument(
+        "-p",
+        "--print",
         action="store_true",
         default=False,
         help="Get latest data",
     )
+    # default
     parser.add_argument(
         "-l",
         "--limit",
         action="store",
-        default=10,
+        default=40,
         type=int,
-        help="Limit number of toots. Defaults to 10",
+        help="Limit number of toots. Defaults to 40 -- 1 API-call",
     )
 
     args = parser.parse_args(args=cli_args)
 
     if args.pub:
-
         login = profile_login(args.profile)
         if login is None:
             sys.stderr.write(f"Cant get access token for profile: {args.profile}\n")
             return 1
-
-        if args.update:
-
-            base_url = f'https://{login["server"]}/api/v1/timelines/public'
-            database_name = url_to_keyname(base_url)
-            last_id = timeline_last_id(database_name=database_name)
-
-            url_params = {
-                "local": "false",
-            }
-            if last_id:
-                url_params["min_id"] = str(last_id)
-
-            http_get_toots(
-                base_url,
-                login["access_token"],
-                timeline_to_parquet,
-                max_toots=args.limit,
-                url_params=url_params,
-            )
-        read_parquet(database_name, args.limit)
-        return 0
+        base_url = f'https://{login["server"]}/api/v1/timelines/public'
+        return get_toots(base_url, login["access_token"], args.update, args.limit, print_stdout=args.print)
 
     elif args.home:
         login = profile_login(args.profile)
@@ -118,13 +152,8 @@ def cli_main(cli_args: List[str]) -> int:
             sys.stderr.write(f"Cant get access token for profile: {args.profile}\n")
             return 1
 
-        http_get_toots(
-            f'https://{login["server"]}/api/v1/timelines/home',
-            login["access_token"],
-            timeline_to_stdout,
-            max_toots=args.limit,
-        )
-        return 0
+        base_url = f'https://{login["server"]}/api/v1/timelines/home'
+        return get_toots(base_url, login["access_token"], args.update, args.limit, print_stdout=args.print)
 
     elif args.tags:
         login = profile_login(args.profile)
@@ -137,7 +166,7 @@ def cli_main(cli_args: List[str]) -> int:
             http_get_toots(
                 f'https://{login["server"]}/api/v1/timelines/tag/{tag}',
                 login["access_token"],
-                timeline_to_stdout,
+                StdoutWriter,
                 max_toots=args.limit,
             )
         return 0

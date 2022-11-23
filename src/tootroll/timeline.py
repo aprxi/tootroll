@@ -36,10 +36,12 @@ def calculate_request_limits(max_toots: int) -> Tuple[int, int]:
 def http_get_toots(
     url_base: str,
     access_token: str,
-    write_callback: Callable[[str, List[Dict[str, Any]]], None],
+    writer,
     max_toots: int = 1,
     url_params: Dict[str, str] = {},
 ) -> None:
+
+    print( writer )
 
     toot_limit, request_limit = calculate_request_limits(max_toots)
     url_params.update(
@@ -52,7 +54,7 @@ def http_get_toots(
     link = f"{url_base}?{param_str}"
 
     rate_limit_remaining = 300  # initially assume default
-    keyname = url_to_keyname(url_base)
+    # keyname = url_to_keyname(url_base)
 
     while rate_limit_remaining > 0 and request_limit > 0:
         request_limit -= 1
@@ -78,21 +80,34 @@ def http_get_toots(
             sys.stderr.write(f"Cant parse response content:{response.content}")
             break
 
-        if len(toots) < 1:
-            logger.debug("No more toots received")
-            break
-        else:
-            logger.debug(f"Received {len(toots)} toots")
-        toots_sorted = sorted(toots, key = lambda t: t["id"], reverse=False)
-        write_callback(keyname, toots_sorted)
+        logger.debug(f"Received {len(toots)} toots")
 
-        url_params["min_id"] = str(toots[0]["id"])
+        if len(toots) < 1:
+            break
+
+        toots_validated = [
+            t for t in toots
+            if t["url"] and t["content"]
+        ]
+        toots_sorted = sorted(toots_validated, key = lambda t: t["id"], reverse=False)
+        # for toot in toots_sorted[0:5]:
+        #     print(json.dumps(toot, indent=4, default=str))
+        toots_added = writer.add_toots(toots_sorted)
+
+        if len(toots) < TOOTS_PER_REQUEST or toots_added < len(toots_validated):
+            logger.debug("End of timeline reached")
+            break
+
+        # url_params["min_id"] = str(toots[0]["id"])
 
         next_link = response.headers.get("Link", "").split(";", 1)[0].strip("<>")
         max_id_search = re.search("max_id=[0-9]*", next_link)
         if not max_id_search:
             break
-        # url_params["max_id"] = re.search("max_id=[0-9]*", next_link).group().split("=", 1)[-1]
+        url_params["max_id"] = re.search("max_id=[0-9]*", next_link).group().split("=", 1)[-1]
 
         param_str = "&".join([f"{key}={value}" for key, value in url_params.items()])
         link = f"{url_base}?{param_str}"
+        break
+
+    writer.close()
