@@ -108,6 +108,6 @@ def http_get_toots(
 
         param_str = "&".join([f"{key}={value}" for key, value in url_params.items()])
         link = f"{url_base}?{param_str}"
-        break
+
 
     writer.close()
