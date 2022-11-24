@@ -4,10 +4,11 @@ import errno
 import logging
 import duckdb
 
+from dataclasses import astuple
 from datetime import datetime
 from typing import List, Tuple, Dict, Union, Any, Optional
 
-from .timeline import TIMELINE_FUNCTIONS
+from .timeline import TootItem
 from .vars import DATABASE_DIR
 
 logger = logging.getLogger(__name__)
@@ -44,13 +45,6 @@ def read_parquet(database_name: str, limit: int) -> None:
             raise error
 
 
-def func_to_type(func: Any) -> Any:
-    return (
-        TYPE_CONVERSIONS.get(func, None)
-        or TYPE_CONVERSIONS[func.__annotations__["return"]]
-    )
-
-
 class ParquetWriter:
     def __init__(
         self,
@@ -69,11 +63,10 @@ class ParquetWriter:
             self.last_ids = self.get_last_ids(limit=limit) or self.last_ids
 
     def create_table(self) -> None:
-
         table_items = ", ".join(
             tuple(
-                f"{key} {func_to_type(func)}"
-                for key, func in TIMELINE_FUNCTIONS.items()
+                f"{keyname} {TYPE_CONVERSIONS[keytype]}"
+                for keyname, keytype in TootItem.__annotations__.items()
             )
         )
         self.con.execute(f"CREATE TABLE items({table_items})")
@@ -99,25 +92,20 @@ class ParquetWriter:
 
     def add_toots(
         self,
-        timeline: List[Dict[str, Any]],
+        toots: List[TootItem],
     ) -> int:
 
-        toots: List[Tuple[Union[str, int, bool]]] = []
-        for post in timeline:
-            post_id = int(post["id"])
-            if post_id in self.last_ids:
-                pass
-            else:
-                toots.append(tuple(v(post[k]) for k, v in TIMELINE_FUNCTIONS.items()))
-                self.last_ids.append(post_id)
+        toots_to_add = [
+            astuple(toot) for toot in toots
+            if toot.id not in self.last_ids
+        ]
 
-        if len(toots) < 1:
-            return 0
+        if len(toots_to_add) > 1:
+            self.con.begin()
+            self.con.executemany("INSERT INTO items VALUES (?, ?, ?, ?, ?, ?, ?)", toots_to_add)
+            self.con.commit()
 
-        self.con.begin()
-        self.con.executemany("INSERT INTO items VALUES (?, ?, ?, ?, ?, ?, ?)", toots)
-        self.con.commit()
-
+        self.last_ids += list([toot[0] for toot in toots_to_add])
         logger.debug(f"Added {len(toots)} toots")
         return len(toots)
 

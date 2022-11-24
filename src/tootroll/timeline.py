@@ -4,6 +4,7 @@ import json
 import logging
 import requests  # type: ignore
 
+from dataclasses import dataclass
 from json.decoder import JSONDecodeError
 from typing import Dict, List, Tuple, Any
 
@@ -27,15 +28,17 @@ TOOTS_PER_REQUEST = 40
 #     "favourites_count": int,
 #     "content": str,
 # }
-TIMELINE_FUNCTIONS = {
-    "id": int,
-    "created_at": iso8601_to_timestamp,
-    "url": str,
-    "replies_count": int,
-    "reblogs_count": int,
-    "favourites_count": int,
-    "content": str,
-}
+
+@dataclass
+class TootItem:
+    id: int
+    created_at: int
+    url: str
+    replies_count: int
+    reblogs_count: int
+    favourites_count: int
+    content: str
+
 
 
 def calculate_request_limits(max_toots: int) -> Tuple[int, int]:
@@ -106,8 +109,16 @@ def http_get_toots(
         if len(toots) < 1:
             break
 
-        toots_validated = [t for t in toots if t["url"] and t["content"]]
-        toots_sorted = sorted(toots_validated, key=lambda t: t["id"], reverse=False)
+        toots_validated = []
+        for toot in toots:
+            if not toot["url"] or not toot["content"]:
+                # likely a reblog -- to be parsed separately
+                continue
+            toot["created_at"] = iso8601_to_timestamp(toot["created_at"])
+            tfields = tuple(v(toot[k]) for k, v in TootItem.__annotations__.items())
+            toots_validated.append(TootItem(*tfields))
+
+        toots_sorted = sorted(toots_validated, key=lambda t: t.id, reverse=False)
         toots_added = writer.add_toots(toots_sorted)
 
         if len(toots) < TOOTS_PER_REQUEST or toots_added < len(toots_validated):
