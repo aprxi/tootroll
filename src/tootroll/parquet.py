@@ -17,6 +17,8 @@ logger = logging.getLogger(__name__)
 TYPE_CONVERSIONS = {
     int: "INT64",
     str: "VARCHAR",
+    Optional[int]: "INT64",
+    Optional[str]: "VARCHAR",
 }
 
 
@@ -102,7 +104,7 @@ class ParquetWriter:
 
         if len(toots_to_add) > 1:
             self.con.begin()
-            self.con.executemany("INSERT INTO items VALUES (?, ?, ?, ?, ?, ?, ?)", toots_to_add)
+            self.con.executemany("INSERT INTO items VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", toots_to_add)
             self.con.commit()
 
         self.last_ids += list([toot[0] for toot in toots_to_add])

@@ -6,7 +6,7 @@ import requests  # type: ignore
 
 from dataclasses import dataclass
 from json.decoder import JSONDecodeError
-from typing import Dict, List, Tuple, Any
+from typing import Dict, List, Tuple, Optional, Any
 
 from .oauth import check_rate_limits
 from .utils import iso8601_to_timestamp
@@ -34,11 +34,45 @@ class TootItem:
     id: int
     created_at: int
     url: str
+    acct: str
     replies_count: int
     reblogs_count: int
     favourites_count: int
     content: str
+    ref_id: Optional[int] = None
+    ref_created_at: Optional[int] = None
+    ref_acct: Optional[str] = None
 
+
+def parse_toot_item(toot_dict: Dict[str, Any]) -> Optional[TootItem]:
+
+    if isinstance(toot_dict["reblog"], dict):
+        # reblog
+        # copy values from reblog 
+        item = toot_dict["reblog"]
+        # define ref_ params
+        kwargs = {
+            "ref_id": int(toot_dict["id"]),
+            "ref_created_at": iso8601_to_timestamp(toot_dict["created_at"]),
+            "ref_acct": toot_dict["account"]["acct"],
+        }
+    else:
+        # regular blog
+        item = toot_dict
+        kwargs = {}
+
+    toot_item = TootItem(
+        id=int(item["id"]),
+        created_at=iso8601_to_timestamp(item["created_at"]),
+        url=item["url"],
+        acct=item["account"]["acct"],
+        replies_count=int(item["replies_count"]),
+        reblogs_count=int(item["reblogs_count"]),
+        favourites_count=int(item["favourites_count"]),
+        content=item["content"],
+        **kwargs,
+    )
+    return toot_item
 
 
 def calculate_request_limits(max_toots: int) -> Tuple[int, int]:
@@ -54,10 +88,6 @@ def calculate_request_limits(max_toots: int) -> Tuple[int, int]:
         toot_limit = max_toots
         request_limit = 1
     return toot_limit, request_limit
-
-
-# def parse_toot_reblog(toot: Dict[str, Any]) -> Dict[str, Union[int, str, bool]]:
-# def parse_toot_regular(toot: Dict[str, Any]) -> Dict[str, Union[int, str, bool]]:
 
 
 def http_get_toots(
@@ -99,29 +129,26 @@ def http_get_toots(
         )
 
         try:
-            toots: List[Dict[str, Any]] = json.loads(response.content)
+            toots = [parse_toot_item(td) for td in json.loads(response.content)]
+            toots_received = len(toots) # count before filtering out un-parsable
+            toots: List[TootItem] = list(
+                filter(
+                    lambda item: item is not None,
+                    toots
+                ))
+            logger.debug(f"TootsReceived={toots_received},TootsValid={len(toots)}")
         except JSONDecodeError:
             sys.stderr.write(f"Cant parse response content:{response.content}")
             break
 
-        logger.debug(f"Received {len(toots)} toots")
+        if len(toots) > 0:
+            toots_added = writer.add_toots(
+                sorted(toots, key=lambda t: t.id, reverse=False),
+            )
+        else:
+            toots_added = 0
 
-        if len(toots) < 1:
-            break
-
-        toots_validated = []
-        for toot in toots:
-            if not toot["url"] or not toot["content"]:
-                # likely a reblog -- to be parsed separately
-                continue
-            toot["created_at"] = iso8601_to_timestamp(toot["created_at"])
-            tfields = tuple(v(toot[k]) for k, v in TootItem.__annotations__.items())
-            toots_validated.append(TootItem(*tfields))
-
-        toots_sorted = sorted(toots_validated, key=lambda t: t.id, reverse=False)
-        toots_added = writer.add_toots(toots_sorted)
-
-        if len(toots) < TOOTS_PER_REQUEST or toots_added < len(toots_validated):
+        if toots_received < TOOTS_PER_REQUEST or toots_added < len(toots):
             logger.debug("End of timeline reached")
             break
 
