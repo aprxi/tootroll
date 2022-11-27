@@ -128,6 +128,9 @@ def http_get_toots(
             f"rate_limit_remaining={rate_limit_remaining},request_limit={request_limit}"
         )
 
+        with open("response.dump", "wb") as stream:
+            stream.write(response.content)
+
         try:
             toots = [parse_toot_item(td) for td in json.loads(response.content)]
             toots_received = len(toots) # count before filtering out un-parsable

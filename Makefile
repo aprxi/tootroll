@@ -12,6 +12,21 @@ install: clean
 	poetry build
 	python -m pip install --force-reinstall dist/$(NAME)-*.whl
 
+.PHONY: docker
+docker:
+	docker build -t $(NAME):latest .
+
+.PHONY: remove_docker
+remove_docker:
+	docker rm -f `docker ps -qaf name=$(NAME)` 2>/dev/null || exit 0
+
+.PHONY: run
+run: remove_docker
+	docker run -d \
+		--name $(NAME) \
+		-p 8888:8888 \
+		--rm $(NAME):latest
+
 .PHONY: clean
 clean:
 	[ -d ./dist ] && rm -rf ./dist || exit 0
