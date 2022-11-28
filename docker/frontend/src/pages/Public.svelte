@@ -1,1 +1,1 @@
-<p>Public toots</p>
+<p>Public Timeline</p>

@@ -1,24 +1,40 @@
 <script>
-    import { onMount } from 'svelte'
-    import { getHomeTimeline } from '../js/timelines'
-
-    const hostUrl = "http://localhost:8888"
-    const accessToken = "dummy_token"
-    let tootList = []
-
-    onMount(async () => {
-        tootList = await getHomeTimeline(hostUrl, accessToken)
+    import { onMount, onDestroy } from 'svelte'
+    import { interpret } from 'xstate'
+  
+    import infiniteScrollMachine from '../js/scroll'
+  
+    import Footer from './Footer.svelte'
+    
+    let options = {
+      root: document.getElementById('scrollArea'),
+      rootMargin: '0px',
+      threshold: 0.5,
+    }
+  
+    const machine = infiniteScrollMachine
+    const service = interpret(machine).start()
+  
+    let observer = new IntersectionObserver(event => {
+      const [entries] = event
+      if (entries.isIntersecting) {
+        service.send({ type: 'SCROLL_TO_BOTTOM' })
+      }
+    }, options)
+  
+    onMount(() => {
+      service.send({ type: 'INITIATE_DATA' })
+      observer.observe(document.querySelector('footer'))
     })
+    onDestroy(() => {
+      observer.unobserve(document.querySelector('footer'))
+    })
+  </script>
 
-</script>
 
 <div class="page-wrapper">
-{#if !tootList}
-    <p>No toots</p>
-{:else}
-    <b>Toots: {tootList.length}</b>
-    {#each tootList as toot}
-
+    {#if $service.matches('checkingIfThereIsMoreData') || $service.matches('loadMoreData')}
+    {#each $service.context.data as toot}
     {#if toot.reblog}
         <div class="toot">
             <div class="row reference">
@@ -29,7 +45,7 @@
             <div class="row">
                 <div class="column-1">
                     <div class="avatar">
-                        <img src="{toot.reblog.account.avatar}" alt="Image">
+                        <img src="{toot.reblog.account.avatar}" alt="avatar">
                     </div>
                 </div>
                 <div class="column-9">
@@ -45,7 +61,7 @@
             <div class="row">
                 <div class="column-1">
                     <div class="avatar">
-                        <img src="{toot.account.avatar}" alt="Image">
+                        <img src="{toot.account.avatar}" alt="avatar">
                     </div>
                 </div>
                 <div class="column-9">
@@ -58,8 +74,13 @@
         </div>
     {/if}
 
-    {:else}
-        <p>No toots</p>
+    <!-- {:else}
+        <p>No toots</p> -->
     {/each}
+
+
 {/if}
+
+<Footer />
+
 </div> 

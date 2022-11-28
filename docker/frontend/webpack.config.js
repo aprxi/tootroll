@@ -68,8 +68,8 @@ module.exports = {
   ],
   devtool: prod ? false : 'source-map',
   devServer: {
-    contentBase: 'public',
+    // contentBase: 'public',
     hot: true,
-    overlay: true,
+    // overlay: true,
   },
 }
