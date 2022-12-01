@@ -14,4 +14,8 @@ DEFAULT_SERVERS = [
 
 
 def url_to_keyname(url: str) -> str:
-    return re.sub("/", "-", re.sub(".*://|/api/v[0-9]*/", "_", url).strip("_"))
+    return \
+        re.sub(
+            "/|\.", "-",
+            re.sub(".*://|/api/v[0-9]*/", "__", url).strip("_")\
+        ).replace("__", "/")

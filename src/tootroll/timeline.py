@@ -17,17 +17,6 @@ logger = logging.getLogger(__name__)
 # note: most servers apply max limit of 40
 TOOTS_PER_REQUEST = 40
 
-# TIMELINE_FUNCTIONS = {
-#     "id": int,
-#     "created_at": iso8601_to_timestamp,
-#     "reblog_created_at": iso8601_to_timestamp,
-#     "is_reblog": bool,
-#     "url": str,
-#     "replies_count": int,
-#     "reblogs_count": int,
-#     "favourites_count": int,
-#     "content": str,
-# }
 
 @dataclass
 class TootItem:
@@ -39,6 +28,7 @@ class TootItem:
     reblogs_count: int
     favourites_count: int
     content: str
+    original: str
     ref_id: Optional[int] = None
     ref_created_at: Optional[int] = None
     ref_acct: Optional[str] = None
@@ -61,6 +51,10 @@ def parse_toot_item(toot_dict: Dict[str, Any]) -> Optional[TootItem]:
         item = toot_dict
         kwargs = {}
 
+    # "columnize" key toot items to enable efficient re-indexing/ searching.
+    # Original toot is kept as a serialized string for now to allow future
+    # change. Because queries are columnar, and storage is on cheap object-
+    # store this is fine.
     toot_item = TootItem(
         id=int(item["id"]),
         created_at=iso8601_to_timestamp(item["created_at"]),
@@ -70,6 +64,7 @@ def parse_toot_item(toot_dict: Dict[str, Any]) -> Optional[TootItem]:
         reblogs_count=int(item["reblogs_count"]),
         favourites_count=int(item["favourites_count"]),
         content=item["content"],
+        original=json.dumps(toot_dict, default=str),
         **kwargs,
     )
     return toot_item
@@ -127,9 +122,6 @@ def http_get_toots(
         logger.debug(
             f"rate_limit_remaining={rate_limit_remaining},request_limit={request_limit}"
         )
-
-        with open("response.dump", "wb") as stream:
-            stream.write(response.content)
 
         try:
             toots = [parse_toot_item(td) for td in json.loads(response.content)]

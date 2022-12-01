@@ -4,9 +4,11 @@ import errno
 import logging
 import duckdb
 
+import pyarrow.parquet as pq
+
 from dataclasses import astuple
 from datetime import datetime
-from typing import List, Tuple, Dict, Union, Any, Optional
+from typing import List, Optional
 
 from .timeline import TootItem
 from .vars import DATABASE_DIR
@@ -22,18 +24,45 @@ TYPE_CONVERSIONS = {
 }
 
 
-def read_parquet_metadata(database_file: str) -> None:
-    con = duckdb.connect(database=database_file)
-    con.execute(f"DESCRIBE SELECT * FROM parquet_metadata('{database_file}');")
-    print(con.fetchall())
+def write_parquet(filepath: str, table) -> None:
+
+    if os.path.exists(filepath):
+        table_original = pq.read_table(
+            source=filepath,
+            pre_buffer=False,
+            use_threads=True,
+        memory_map=True)
+    else:
+        table_original = None
+
+    # create new parquetfile, via tempfile to prevent data-loss in case of failure
+    tempfile = f"{os.path.dirname(filepath)}/.{os.path.basename(filepath)}"
+    handle = pq.ParquetWriter(tempfile, table.schema)
+
+    if table_original:
+        handle.write_table(table_original)
+
+    handle.write_table(table)
+    handle.close()
+    # when succesful, promote tempfile
+    os.rename(tempfile, filepath)
 
 
 def read_parquet(database_name: str, limit: int) -> None:
-    database_file = f"{DATABASE_DIR}/{database_name}.parquet"
-    con = duckdb.connect(database=database_file)
+
+    parquet_dir = f"{DATABASE_DIR}/{database_name}.parquet"
+    parquet_file = f'{parquet_dir}\
+/date={datetime.now().strftime("%Y%m%d")}/file-0.parquet'
+
+    if not os.path.exists(parquet_file):
+        return None
+
+    pq_str = f"{parquet_dir}/*/*"
 
     # retrieve the items again
-    con.execute(f"SELECT * FROM items ORDER BY created_at DESC LIMIT {limit}")
+    con = duckdb.connect(database=":memory:")
+    con.execute(f"SELECT * FROM read_parquet('{pq_str}') ORDER BY created_at DESC LIMIT {limit}")
+
     items = con.fetchall()
     try:
         for item in items:
@@ -54,15 +83,16 @@ class ParquetWriter:
         limit: int,
     ) -> None:
         self.last_ids: List[int] = []
-        database_file = f"{DATABASE_DIR}/{database_name}.parquet"
-        if not os.path.exists(database_file):
-            os.makedirs(DATABASE_DIR, exist_ok=True)
-            self.con = duckdb.connect(database=database_file)
-            self.create_table()
-        else:
-            self.con = duckdb.connect(database=database_file)
-            limit = 2000
-            self.last_ids = self.get_last_ids(limit=limit) or self.last_ids
+
+        self.parquet_dir = f"{DATABASE_DIR}/{database_name}.parquet"
+        self.parquet_file = f'{self.parquet_dir}\
+/date={datetime.now().strftime("%Y%m%d")}/file-0.parquet'
+
+        self.con = duckdb.connect(database=":memory:")
+        self.create_table()
+
+        limit = 2000
+        self.last_ids = self.get_last_ids(limit=limit) or self.last_ids
 
     def create_table(self) -> None:
         table_items = ", ".join(
@@ -76,21 +106,27 @@ class ParquetWriter:
     def get_last_ids(
         self, limit: int = 1, max_id: Optional[int] = None
     ) -> Optional[List[int]]:
+
+        if not os.path.exists(self.parquet_file):
+            return None
+
+        pq_str = f"{self.parquet_dir}/*/*"
         if max_id:
             base_query = (
-                f"SELECT distinct(id) FROM items WHERE id < {max_id} ORDER BY id DESC"
+                f"SELECT distinct(id) FROM read_parquet('{pq_str}') WHERE id < {max_id}"
             )
         else:
-            base_query = "SELECT distinct(id) FROM items ORDER BY id DESC"
+            base_query = f"SELECT distinct(id) FROM read_parquet('{pq_str}')"
 
         try:
-            self.con.execute(f"{base_query} LIMIT {limit}")
+            self.con.execute(f"{base_query} ORDER BY id DESC LIMIT {limit}")
             items = self.con.fetchall()
             if not items or len(items) < 1:
                 return None
             return list([int(tup[0]) for tup in items])
         except ValueError:
             return None
+
 
     def add_toots(
         self,
@@ -102,14 +138,29 @@ class ParquetWriter:
             if toot.id not in self.last_ids
         ]
 
-        if len(toots_to_add) > 1:
+        if len(toots_to_add) > 0:
             self.con.begin()
-            self.con.executemany("INSERT INTO items VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", toots_to_add)
+            self.con.executemany("INSERT INTO items VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", toots_to_add)
             self.con.commit()
 
         self.last_ids += list([toot[0] for toot in toots_to_add])
-        logger.debug(f"Added {len(toots)} toots")
-        return len(toots)
+        logger.debug(f"Added {len(toots_to_add)} toots")
+        return len(toots_to_add)
 
     def close(self) -> None:
+
+        rel = self.con.table("items")
+        arrow_table = rel.arrow()
+
+        output_dir = os.path.dirname(self.parquet_file)
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir, exist_ok=True)
+
+        write_parquet(self.parquet_file, arrow_table)
+
+        # validate
+        self.con.execute(f"SELECT * FROM read_parquet('{self.parquet_dir}/*/*')") #  LIMIT 10")
+        items = self.con.fetchall()
+        sys.stdout.write(f"Total items={len(items)},unique={len(set(items))}]\n")
+
         self.con.close()
