@@ -9,7 +9,6 @@ from typing import Dict, Optional, Tuple
 from .utils import lower_dict_keys, write_secrets_file
 from .vars import SECRETS_DIR
 
-
 DEFAULT_APP_NAME = "tootroll"
 
 

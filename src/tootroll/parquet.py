@@ -48,7 +48,7 @@ def write_parquet(filepath: str, table) -> None:
     os.rename(tempfile, filepath)
 
 
-def read_parquet(database_name: str, limit: int) -> None:
+def read_parquet(database_name: str, limit: int) -> List[TootItem]:
 
     parquet_dir = f"{DATABASE_DIR}/{database_name}.parquet"
     parquet_file = f'{parquet_dir}\
@@ -63,17 +63,10 @@ def read_parquet(database_name: str, limit: int) -> None:
     con = duckdb.connect(database=":memory:")
     con.execute(f"SELECT * FROM read_parquet('{pq_str}') ORDER BY created_at DESC LIMIT {limit}")
 
-    items = con.fetchall()
-    try:
-        for item in items:
-            sys.stdout.write(f"{datetime.fromtimestamp(item[1])},{item}\n")
-
-        sys.stdout.write(f"Total items={len(items)},unique={len(set(items))}]\n")
-    except IOError as error:
-        if error.errno == errno.EPIPE:
-            pass
-        else:
-            raise error
+    return list([
+        TootItem(*item)
+        for item in con.fetchall()
+    ])
 
 
 class ParquetWriter:

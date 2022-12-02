@@ -3,13 +3,15 @@ import sys
 import json
 import argparse
 
+from datetime import datetime
 from typing import List, Dict, Any, NoReturn, Optional
 
 from .accounts import profile_update, profile_login, profile_list
-from .timeline import http_get_toots
-from .utils import configure_logger
+from .timeline import TootItem, http_get_toots
+from .utils import configure_logger, iso8601_to_timestamp
 from .parquet import read_parquet, ParquetWriter
 from .vars import url_to_keyname
+from .server import app_main
 
 
 class CustomArgParser(argparse.ArgumentParser):
@@ -19,62 +21,39 @@ class CustomArgParser(argparse.ArgumentParser):
         sys.exit(2)
 
 
-class StdoutWriter:
-    def __init__(
-        self,
-        name: str,
-    ) -> None:
-        pass
-
-    def add_toots(
-        self,
-        timeline: List[Dict[str, Any]],
-    ) -> int:
-        sys.stdout.write(json.dumps(timeline, default=str))
-        return len(timeline)
-
-    def close(self) -> None:
-        pass
-
-
 def get_toots(
     base_url: str,
     access_token: str,
-    update_type: Optional[str],
+    update_type: str,
     limit: int,
-    print_stdout: bool = False,
 ) -> int:
-    database_name = url_to_keyname(base_url)
+    url_params = {
+        "local": "false",
+    }
 
-    if update_type:
-        url_params = {
-            "local": "false",
-        }
-
-        writer = ParquetWriter(database_name, limit)
-        if update_type == "fill":
-            last_id = writer.get_last_ids(limit=1)
-            if last_id:
-                url_params["min_id"] = str(last_id[0])
-        elif update_type == "latest":
-            # default is to get latest
-            pass
-        else:
-            sys.stderr.write(
-                f"Unknown update option: '{update_type}',\
+    writer = ParquetWriter(url_to_keyname(base_url), limit)
+    if update_type == "fill":
+        last_id = writer.get_last_ids(limit=1)
+        if last_id:
+            url_params["min_id"] = str(last_id[0])
+    elif update_type == "latest":
+        # default is to get latest
+        pass
+    else:
+        sys.stderr.write(
+            f"Unknown update option: '{update_type}',\
 valid choices: ['latest', 'fill']\n"
-            )
-            return 1
-
-        http_get_toots(
-            base_url,
-            access_token,
-            writer,
-            max_toots=limit,
-            url_params=url_params,
         )
-    if print_stdout:
-        read_parquet(database_name, limit)
+        return 1
+
+    http_get_toots(
+        base_url,
+        access_token,
+        writer,
+        max_toots=limit,
+        url_params=url_params,
+    )
+
     return 0
 
 
@@ -86,19 +65,9 @@ def cli_main(cli_args: List[str]) -> int:
 
     group = parser.add_mutually_exclusive_group(required=False)
     group.add_argument(
-        "--pub",
+        "--web",
         action="store_true",
-        help="Show public timeline of server",
-    )
-    group.add_argument(
-        "--home",
-        action="store_true",
-        help="Show home timeline",
-    )
-    group.add_argument(
-        "--tags",
-        action="store",
-        help="Tag(s). Use comma-separated string to pass a list",
+        help="Start webserver",
     )
     group.add_argument(
         "--configure",
@@ -130,14 +99,6 @@ def cli_main(cli_args: List[str]) -> int:
         help="Get latest data",
     )
     parser.add_argument(
-        "-p",
-        "--print",
-        action="store_true",
-        default=False,
-        help="Get latest data",
-    )
-    # default
-    parser.add_argument(
         "-l",
         "--limit",
         action="store",
@@ -148,50 +109,9 @@ def cli_main(cli_args: List[str]) -> int:
 
     args = parser.parse_args(args=cli_args)
 
-    if args.pub:
-        login = profile_login(args.profile)
-        if login is None:
-            sys.stderr.write(f"Cant get access token for profile: {args.profile}\n")
-            return 1
-        base_url = f'https://{login["server"]}/api/v1/timelines/public'
-        return get_toots(
-            base_url,
-            login["access_token"],
-            args.update,
-            args.limit,
-            print_stdout=args.print,
-        )
-
-    elif args.home:
-        login = profile_login(args.profile)
-        if login is None:
-            sys.stderr.write(f"Cant get access token for profile: {args.profile}\n")
-            return 1
-
-        base_url = f'https://{login["server"]}/api/v1/timelines/home'
-        return get_toots(
-            base_url,
-            login["access_token"],
-            args.update,
-            args.limit,
-            print_stdout=args.print,
-        )
-
-    elif args.tags:
-        login = profile_login(args.profile)
-        if login is None:
-            sys.stderr.write(f"Cant get access token for profile: {args.profile}\n")
-            return 1
-
-        tags = args.tags.split(",")
-        for tag in tags:
-            http_get_toots(
-                f'https://{login["server"]}/api/v1/timelines/tag/{tag}',
-                login["access_token"],
-                StdoutWriter,
-                max_toots=args.limit,
-            )
-        return 0
+    if args.web:
+        # run as webserver
+        app_main()
 
     elif args.configure:
         response_status = profile_update(name=args.profile)
@@ -211,5 +131,23 @@ def cli_main(cli_args: List[str]) -> int:
             sys.stderr.write(parser.format_help())
             return 1
     else:
-        sys.stderr.write(parser.format_help())
-        return 1
+        login = profile_login(args.profile)
+        if login is None:
+            sys.stderr.write(f"Cant get access token for profile: {args.profile}\n")
+            return 1
+
+        base_url = f'https://{login["server"]}/api/v1/timelines/home'
+        if args.update:
+            return get_toots(
+                base_url,
+                login["access_token"],
+                args.update,
+                args.limit,
+            )
+        else:
+            toots = read_parquet(url_to_keyname(base_url), args.limit)
+            for toot in toots:
+                sys.stdout.write("\n".join([
+                    f"{datetime.fromtimestamp(toot.created_at).isoformat()} {toot.acct}",
+                    toot.content[0:600],
+                ]) + "\n\n")
