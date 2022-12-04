@@ -1,6 +1,5 @@
 import os
 import sys
-import errno
 import logging
 import duckdb
 
@@ -10,8 +9,8 @@ from dataclasses import astuple
 from datetime import datetime
 from typing import List, Optional
 
-from .timeline import TootItem
-from .vars import DATABASE_DIR
+from ..timeline import TootItem
+from ..vars import DATABASE_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +132,7 @@ class ParquetWriter:
 
         if len(toots_to_add) > 0:
             self.con.begin()
-            self.con.executemany("INSERT INTO items VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", toots_to_add)
+            self.con.executemany("INSERT INTO items VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", toots_to_add)
             self.con.commit()
 
         self.last_ids += list([toot[0] for toot in toots_to_add])

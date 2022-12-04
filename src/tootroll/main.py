@@ -9,9 +9,9 @@ from typing import List, Dict, Any, NoReturn, Optional
 from .accounts import profile_update, profile_login, profile_list
 from .timeline import TootItem, http_get_toots
 from .utils import configure_logger, iso8601_to_timestamp
-from .parquet import read_parquet, ParquetWriter
-from .vars import url_to_keyname
-from .server import app_main
+from .db.parquet import read_parquet, ParquetWriter
+from .vars import extract_hostname
+from .server.api import app_main
 
 
 class CustomArgParser(argparse.ArgumentParser):
@@ -31,7 +31,7 @@ def get_toots(
         "local": "false",
     }
 
-    writer = ParquetWriter(url_to_keyname(base_url), limit)
+    writer = ParquetWriter(f"{extract_hostname(base_url)}/home", limit)
     if update_type == "fill":
         last_id = writer.get_last_ids(limit=1)
         if last_id:
@@ -147,7 +147,12 @@ def cli_main(cli_args: List[str]) -> int:
         else:
             toots = read_parquet(url_to_keyname(base_url), args.limit)
             for toot in toots:
-                sys.stdout.write("\n".join([
-                    f"{datetime.fromtimestamp(toot.created_at).isoformat()} {toot.acct}",
-                    toot.content[0:600],
-                ]) + "\n\n")
+                sys.stdout.write(
+                    "\n".join(
+                        [
+                            f"{datetime.fromtimestamp(toot.created_at).isoformat()} {toot.acct}",
+                            toot.content[0:600],
+                        ]
+                    )
+                    + "\n\n"
+                )

@@ -28,7 +28,6 @@ class TootItem:
     reblogs_count: int
     favourites_count: int
     content: str
-    original: str
     ref_id: Optional[int] = None
     ref_created_at: Optional[int] = None
     ref_acct: Optional[str] = None
@@ -38,7 +37,7 @@ def parse_toot_item(toot_dict: Dict[str, Any]) -> Optional[TootItem]:
 
     if isinstance(toot_dict["reblog"], dict):
         # reblog
-        # copy values from reblog 
+        # copy values from reblog
         item = toot_dict["reblog"]
         # define ref_ params
         kwargs = {
@@ -52,9 +51,7 @@ def parse_toot_item(toot_dict: Dict[str, Any]) -> Optional[TootItem]:
         kwargs = {}
 
     # "columnize" key toot items to enable efficient re-indexing/ searching.
-    # Original toot is kept as a serialized string for now to allow future
-    # change. Because queries are columnar, and storage is on cheap object-
-    # store this is fine.
+    # only store data required to show home lineline
     toot_item = TootItem(
         id=int(item["id"]),
         created_at=iso8601_to_timestamp(item["created_at"]),
@@ -64,7 +61,6 @@ def parse_toot_item(toot_dict: Dict[str, Any]) -> Optional[TootItem]:
         reblogs_count=int(item["reblogs_count"]),
         favourites_count=int(item["favourites_count"]),
         content=item["content"],
-        original=json.dumps(toot_dict, default=str),
         **kwargs,
     )
     return toot_item
@@ -125,12 +121,8 @@ def http_get_toots(
 
         try:
             toots = [parse_toot_item(td) for td in json.loads(response.content)]
-            toots_received = len(toots) # count before filtering out un-parsable
-            toots: List[TootItem] = list(
-                filter(
-                    lambda item: item is not None,
-                    toots
-                ))
+            toots_received = len(toots)  # count before filtering out un-parsable
+            toots: List[TootItem] = list(filter(lambda item: item is not None, toots))
             logger.debug(f"TootsReceived={toots_received},TootsValid={len(toots)}")
         except JSONDecodeError:
             sys.stderr.write(f"Cant parse response content:{response.content}")
