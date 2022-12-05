@@ -11,7 +11,7 @@ from .timeline import TootItem, http_get_toots
 from .utils import configure_logger, iso8601_to_timestamp
 from .db.parquet import read_parquet, ParquetWriter
 from .vars import extract_hostname
-from .server.api import app_main
+from .http.api import app_main
 
 
 class CustomArgParser(argparse.ArgumentParser):
