@@ -8,7 +8,7 @@ from fastapi import APIRouter, FastAPI, Request
 from fastapi.responses import Response, HTMLResponse
 from starlette.middleware.cors import CORSMiddleware
 
-from typing import Dict, Optional, Any
+from typing import Dict, Tuple, Optional, Any
 
 from ..db.utils import list_by_partition
 
@@ -47,6 +47,31 @@ def empty_response(status_code: int) -> Response:
     )
 
 
+def validate_http_request_range(input_range: str, filesize: int) -> Tuple[int, int]:
+
+    if not re.match("[0-9]{1,}-[0-9]{0,}$|^[0-9]{0,}-[0-9]{1,}$", input_range):
+        raise ValueError(f"invalid range: {input_range}")
+
+    r_start_str, r_end_str = input_range.split("-")
+    if not r_start_str:
+        # e.g. -10, get last 10 bytes)
+        r_start = filesize - int(r_end_str)
+        r_end = filesize - 1
+    elif not r_end_str:
+        # e.g. 10-, start at byte #10
+        r_start = int(r_start_str)
+        r_end = filesize - 1
+    else:
+        r_start = int(r_start_str)
+        r_end = int(r_end_str)
+
+    if r_start < 0 or r_start >= filesize:
+        raise ValueError(f"invalid range, {input_range} (filesize={filesize}")
+
+
+    return tuple([int(r_start), int(r_end)])
+
+
 def static_file_response(file_path: str, range_request: Optional[str] = None) -> HTMLResponse:
     if not os.path.exists(file_path):
         return empty_response(404)
@@ -59,28 +84,32 @@ def static_file_response(file_path: str, range_request: Optional[str] = None) ->
         file_info = os.stat(file_path)
         range_type, ranges_str = range_request.strip(" ").split("=")
         # TODOs: 
-        # accept formats like 100-, -100
-        # validate if range is within file-size
         # give a proper error if range_type != bytes
-        # give a proper error if range is malformed or un-supported
-        # accept multiple ranges (Content-Type: multipart/byteranges; boundary=String_separator)
+
         assert range_type == "bytes"
-        ranges = list([r.strip(" ") for r in ranges_str.split(",")])
-        for range in ranges:
-            r_start, r_end = range.split("-")
-            assert r_start != ""
-            assert r_end != ""
+        try:
+            ranges = [
+                validate_http_request_range(input_range, file_info.st_size)
+                for input_range in list(
+                    [r.strip(" ") for r in ranges_str.split(",")
+                ])
+            ]
+        except ValueError as error:
+            return HTMLResponse(content=str(error), status_code=400)
 
-        fo = open(file_path, "rb")
-        fo.seek(int(r_start))
-        content = fo.read(int(r_end) - int(r_start) + 1)
-        fo.close()
+        for r_start, r_end in ranges:
+            fo = open(file_path, "rb")
+            fo.seek(int(r_start))
+            content = fo.read(int(r_end) - int(r_start) + 1)
+            fo.close()
 
-        headers = {
-            "Content-Range": f"bytes {range_request}/{file_info.st_size}",
-            "Content-Type": "application/octet-stream",
-            "Content-Length": str(len(content)),
-        }
+            headers = {
+                "Content-Range": f"bytes {range_request}/{file_info.st_size}",
+                "Content-Type": "application/octet-stream",
+                "Content-Length": str(len(content)),
+            }
+            # TODO: # parse multiple ranges (Content-Type: multipart/byteranges; boundary=String_separator)
+            break
         return Response(content=content, headers=headers, status_code=206)
 
 

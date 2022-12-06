@@ -32,7 +32,6 @@ def list_by_partition(
             list(set(partition_values).intersection(partition_values_filter))
 
 
-
     parquet_files = []
     for pv in sorted(partition_values):
         pv_directory = f"{directory}/{partition_key}={pv}"
