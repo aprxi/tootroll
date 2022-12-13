@@ -7,7 +7,7 @@ import pyarrow.parquet as pq
 
 from dataclasses import astuple
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Tuple, Optional
 
 from ..timeline import TootItem
 from ..vars import DATABASE_DIR
@@ -83,6 +83,8 @@ class ParquetWriter:
         self.con = duckdb.connect(database=":memory:")
         self.create_table()
 
+        self.stat_toots_added = 0
+        self.stat_toots_total = 0
         limit = 2000
         self.last_ids = self.get_last_ids(limit=limit) or self.last_ids
 
@@ -99,6 +101,8 @@ class ParquetWriter:
         self, limit: int = 1, max_id: Optional[int] = None
     ) -> Optional[List[int]]:
 
+        # TODO: rewrite such that both current and previous (e.g. yesterdays)
+        # parquet file is read
         if not os.path.exists(self.parquet_file):
             return None
 
@@ -132,11 +136,12 @@ class ParquetWriter:
 
         if len(toots_to_add) > 0:
             self.con.begin()
-            self.con.executemany("INSERT INTO items VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", toots_to_add)
+            self.con.executemany(f'INSERT INTO items VALUES ({", ".join("?" for _ in range(len(toots_to_add[0])))})', toots_to_add)
             self.con.commit()
 
         self.last_ids += list([toot[0] for toot in toots_to_add])
         logger.debug(f"Added {len(toots_to_add)} toots")
+        self.stat_toots_added += len(toots_to_add)
         return len(toots_to_add)
 
     def close(self) -> None:
@@ -153,6 +158,7 @@ class ParquetWriter:
         # validate
         self.con.execute(f"SELECT * FROM read_parquet('{self.parquet_dir}/*/*')") #  LIMIT 10")
         items = self.con.fetchall()
-        sys.stdout.write(f"Total items={len(items)},unique={len(set(items))}]\n")
+        logger.debug(f"total items={len(items)},unique={len(set(items))}\n")
 
         self.con.close()
+        self.stat_toots_total = len(items)

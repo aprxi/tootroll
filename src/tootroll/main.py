@@ -54,6 +54,9 @@ valid choices: ['latest', 'fill']\n"
         url_params=url_params,
     )
 
+    sys.stdout.write(f"toots_total={writer.stat_toots_total},\
+toots_added={writer.stat_toots_added}\n")
+
     return 0
 
 
@@ -145,14 +148,15 @@ def cli_main(cli_args: List[str]) -> int:
                 args.limit,
             )
         else:
-            toots = read_parquet(url_to_keyname(base_url), args.limit)
-            for toot in toots:
-                sys.stdout.write(
-                    "\n".join(
-                        [
-                            f"{datetime.fromtimestamp(toot.created_at).isoformat()} {toot.acct}",
-                            toot.content[0:600],
-                        ]
-                    )
-                    + "\n\n"
-                )
+            pass
+            # toots = read_parquet(url_to_keyname(base_url), args.limit)
+            # for toot in toots:
+            #     sys.stdout.write(
+            #         "\n".join(
+            #             [
+            #                 f"{datetime.fromtimestamp(toot.created_at).isoformat()} {toot.acct}",
+            #                 toot.content[0:600],
+            #             ]
+            #         )
+            #         + "\n\n"
+            #     )

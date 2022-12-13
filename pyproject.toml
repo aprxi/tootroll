@@ -16,6 +16,7 @@ duckdb = "^0.6.0"
 pyarrow = "^10.0.1"
 uvicorn = "^0.20.0"
 fastapi = "^0.88.0"
+websockets = "^10.4"
 
 [tool.poetry.dev-dependencies]
 pre-commit = "^2.19.0"
