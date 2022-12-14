@@ -12,19 +12,16 @@ from ..vars import DATABASE_DIR
 HTML_DIR = f"{os.path.dirname(__file__)}/html"
 
 
-def json_response(content: Dict[str, Any], status_code=200) -> Response:
+def json_response(content: Dict[str, Any], status_code: int = 200) -> Response:
     return Response(
         content=json.dumps(content),
         media_type="application/json",
-        status_code=status_code
+        status_code=status_code,
     )
 
 
 def empty_response(status_code: int) -> Response:
-    return Response(
-        content=b"",
-        status_code=status_code
-    )
+    return Response(content=b"", status_code=status_code)
 
 
 def validate_http_request_range(input_range: str, filesize: int) -> Tuple[int, int]:
@@ -48,12 +45,11 @@ def validate_http_request_range(input_range: str, filesize: int) -> Tuple[int, i
     if r_start < 0 or r_start >= filesize:
         raise ValueError(f"invalid range, {input_range} (filesize={filesize}")
 
-
-    return tuple([int(r_start), int(r_end)])
+    return int(r_start), int(r_end)
 
 
 def path_url_to_file(url_path: str) -> Tuple[str, str]:
-    if re.match("^db/.*/.*\.parquet/.*/.*\.parquet", url_path):
+    if re.match("^db/.*/.*\\.parquet/.*/.*\\.parquet", url_path):
         file_path = f'{DATABASE_DIR}/{url_path.split("db/", 1)[-1]}'
         content_type = "application/octet-stream"
     else:
@@ -64,7 +60,9 @@ def path_url_to_file(url_path: str) -> Tuple[str, str]:
     return file_path, content_type
 
 
-def static_file_head_response(url_path: str, range_request: Optional[str] = None) -> Response:
+def static_file_head_response(
+    url_path: str, range_request: Optional[str] = None
+) -> Response:
     file_path, content_type = path_url_to_file(url_path)
 
     if not os.path.exists(file_path):
@@ -100,13 +98,13 @@ def parse_range_request(range_request: str, file_size: int) -> List[Tuple[int, i
 
     return [
         validate_http_request_range(input_range, file_size)
-        for input_range in list(
-            [r.strip(" ") for r in ranges_str.split(",")
-        ])
+        for input_range in list([r.strip(" ") for r in ranges_str.split(",")])
     ]
 
 
-def static_file_get_response(url_path: str, range_request: Optional[str] = None) -> HTMLResponse:
+def static_file_get_response(
+    url_path: str, range_request: Optional[str] = None
+) -> HTMLResponse:
 
     file_path, content_type = path_url_to_file(url_path)
     if not os.path.exists(file_path):
@@ -130,10 +128,11 @@ def static_file_get_response(url_path: str, range_request: Optional[str] = None)
         mm = mmap.mmap(f.fileno(), 0)
 
         for r_start, r_end in ranges:
-            mm.seek(int(r_start))              
+            mm.seek(int(r_start))
             content = mm.read(int(r_end) - int(r_start) + 1)
 
-            # TODO: # parse multiple ranges (Content-Type: multipart/byteranges; boundary=String_separator)
+            # TODO: # parse multiple ranges
+            # (Content-Type: multipart/byteranges; boundary=String_separator)
             break
 
         mm.close()

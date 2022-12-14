@@ -37,7 +37,7 @@ DATE=`date +%s`
 (( DATE /= $CRON_SECONDS, DATE *= 300, DATE += $CRON_OFFSET_SECONDS ))
 
 PROJECT_DIR="`dirname $0`/.."
-EXEC="$RUN_PREFIX python -m tootroll --profile $PROFILE -u -l 800"
+EXEC="$RUN_PREFIX python -m tootroll -u -l 800"
 
 # run
 cd "$PROJECT_DIR"/src && \

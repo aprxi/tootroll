@@ -1,14 +1,14 @@
 #!/bin/bash
 
 # This script serves the toots in (Parquet) database over HTTP.
-# 
+#
 # prerequisites:
 # 0. install dependencies: poetry update
 # 1. configure server: python -m tootroll --configure
 #
 # Example
 # cd ${REPO_DIRECTORY} && bash bin/tootserve.sh
-# 
+#
 # Test
 # curl "http://localhost:5000/api/v1/servers"
 

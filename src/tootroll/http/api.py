@@ -7,9 +7,14 @@ from fastapi import APIRouter, FastAPI, WebSocket, Request
 from fastapi.responses import Response, HTMLResponse
 from starlette.middleware.cors import CORSMiddleware
 
-from typing import Tuple, Optional
+from typing import Optional
 
-from .responses import json_response, empty_response, static_file_head_response, static_file_get_response
+from .responses import (
+    json_response,
+    empty_response,
+    static_file_head_response,
+    static_file_get_response,
+)
 from ..db.utils import list_by_partition
 from ..vars import DATABASE_DIR
 
@@ -40,17 +45,19 @@ async def alive() -> Response:
 
 @api.get("/servers")
 async def list_servers() -> Response:
+    """List available servers to client"""
     response = {"Servers": []}
 
     try:
         response["Servers"] = os.listdir(DATABASE_DIR)
-        return json_response(response)
     except NotADirectoryError:
-        logger.error(f"DATABASE_DIR '{DATABASE_DIR}' not a directory")
-        return empty_response(500)
+        # log as warning on server only -- for client this is not an error
+        logger.warning(f"DATABASE_DIR '{DATABASE_DIR}' not a directory")
     except FileNotFoundError:
-        logger.error(f"DATABASE_DIR '{DATABASE_DIR}' does not exist")
-        return empty_response(500)
+        # log as warning on server only -- for client this is not an error
+        logger.warning(f"DATABASE_DIR '{DATABASE_DIR}' does not exist")
+
+    return json_response(response, status_code=200)
 
 
 @api.get("/servers/{server}")
@@ -60,12 +67,14 @@ async def list_server_databases(server: str) -> Response:
 
     try:
         directory = f"{DATABASE_DIR}/{server}"
-        response["Databases"] =  list([
-            fname for fname in
-            os.listdir(directory)
-            if re.match(".*\.parquet$", fname)
-            and os.path.isdir(f"{directory}/{fname}")
-        ])
+        response["Databases"] = list(
+            [
+                fname
+                for fname in os.listdir(directory)
+                if re.match(".*\\.parquet$", fname)
+                and os.path.isdir(f"{directory}/{fname}")
+            ]
+        )
         return json_response(response)
     except NotADirectoryError:
         return empty_response(404)
@@ -80,12 +89,14 @@ async def list_database_partitions(server: str, database: str) -> Response:
 
     try:
         directory = f"{DATABASE_DIR}/{server}/{database}"
-        response["Partitions"] =  list([
-            fname for fname in
-            os.listdir(directory)
-            if re.match("^\w*=\w*$", fname)
-            and os.path.isdir(f"{directory}/{fname}")
-        ])
+        response["Partitions"] = list(
+            [
+                fname
+                for fname in os.listdir(directory)
+                if re.match("^\w*=\w*$", fname)
+                and os.path.isdir(f"{directory}/{fname}")
+            ]
+        )
         return json_response(response)
     except NotADirectoryError:
         return empty_response(404)
@@ -98,7 +109,7 @@ async def list_partition_files(
     server: str,
     database: str,
     partition_key: Optional[str] = None,
-    partition_values: Optional[str] = None
+    partition_values: Optional[str] = None,
 ) -> Response:
 
     if partition_key:
@@ -107,33 +118,33 @@ async def list_partition_files(
         else:
             partition_values_filter = None
 
-        partition_values = \
-            list_by_partition(
-                server,
-                database,
-                partition_key,
-                partition_values_filter=partition_values_filter,
-            )
+        partition_values = list_by_partition(
+            server,
+            database,
+            partition_key,
+            partition_values_filter=partition_values_filter,
+        )
     else:
         # not yet implemented
         return empty_response(400)
 
     response = {
         "Path": f"http://localhost:5000/db/{server}/{database}",
-        "Files": partition_values
+        "Files": partition_values,
     }
 
     return json_response(response)
 
 
-@api.options('/{rest_of_path:path}')
+@api.options("/{rest_of_path:path}")
 async def timelines_home_options(request: Request, rest_of_path: str) -> Response:
     response = Response()
-    response.headers['Access-Control-Allow-Origin'] = ALLOWED_ORIGINS
-    response.headers['Access-Control-Allow-Methods'] = 'POST, GET, DELETE, OPTIONS, HEAD'
-    response.headers['Access-Control-Allow-Headers'] = 'Authorization, Content-Type'
+    response.headers["Access-Control-Allow-Origin"] = ALLOWED_ORIGINS
+    response.headers[
+        "Access-Control-Allow-Methods"
+    ] = "POST, GET, DELETE, OPTIONS, HEAD"
+    response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
     return response
-
 
 
 ws_html = """
@@ -170,12 +181,12 @@ ws_html = """
 </html>
 """
 
+
 @static.get("/demo")
 async def demo():
     return HTMLResponse(ws_html)
 
 
-import time
 @static.websocket("/")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
@@ -189,13 +200,17 @@ async def websocket_endpoint(websocket: WebSocket):
 @static.head("/{url_path:path}", response_class=HTMLResponse)
 async def static_file_head(url_path: str, request: Request) -> HTMLResponse:
     # print( json.dumps(request.headers, indent=4, default=str))
-    return static_file_head_response(url_path, range_request=request.headers.get("Range", None))
+    return static_file_head_response(
+        url_path, range_request=request.headers.get("Range", None)
+    )
 
 
 @static.get("/{url_path:path}", response_class=HTMLResponse)
 async def static_file_get(url_path: str, request: Request) -> HTMLResponse:
     # print( json.dumps(request.headers, indent=4, default=str))
-    return static_file_get_response(url_path, range_request=request.headers.get("Range", None))
+    return static_file_get_response(
+        url_path, range_request=request.headers.get("Range", None)
+    )
 
 
 def app_main():

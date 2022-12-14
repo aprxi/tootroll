@@ -3,13 +3,12 @@ import sys
 import json
 import argparse
 
-from datetime import datetime
-from typing import List, Dict, Any, NoReturn, Optional
+from typing import List, NoReturn
 
-from .accounts import profile_update, profile_login, profile_list
-from .timeline import TootItem, http_get_toots
-from .utils import configure_logger, iso8601_to_timestamp
-from .db.parquet import read_parquet, ParquetWriter
+from .accounts import account_update, account_login, account_list
+from .timeline import http_get_toots
+from .utils import configure_logger
+from .db.parquet import ParquetWriter
 from .vars import extract_hostname
 from .http.api import app_main
 
@@ -24,7 +23,6 @@ class CustomArgParser(argparse.ArgumentParser):
 def get_toots(
     base_url: str,
     access_token: str,
-    update_type: str,
     limit: int,
 ) -> int:
     url_params = {
@@ -32,19 +30,6 @@ def get_toots(
     }
 
     writer = ParquetWriter(f"{extract_hostname(base_url)}/home", limit)
-    if update_type == "fill":
-        last_id = writer.get_last_ids(limit=1)
-        if last_id:
-            url_params["min_id"] = str(last_id[0])
-    elif update_type == "latest":
-        # default is to get latest
-        pass
-    else:
-        sys.stderr.write(
-            f"Unknown update option: '{update_type}',\
-valid choices: ['latest', 'fill']\n"
-        )
-        return 1
 
     http_get_toots(
         base_url,
@@ -54,8 +39,10 @@ valid choices: ['latest', 'fill']\n"
         url_params=url_params,
     )
 
-    sys.stdout.write(f"toots_total={writer.stat_toots_total},\
-toots_added={writer.stat_toots_added}\n")
+    sys.stdout.write(
+        f"toots_total={writer.stat_toots_total},\
+toots_added={writer.stat_toots_added}\n"
+    )
 
     return 0
 
@@ -74,16 +61,24 @@ def cli_main(cli_args: List[str]) -> int:
     )
     group.add_argument(
         "--configure",
-        action="store_true",
+        action="store",
+        nargs="?",
+        metavar="ACCOUNT",
+        const="@",
         help="Create or update a profile",
     )
     group.add_argument(
-        "--show",
+        "--accounts",
+        action="store_true",
+        help="List accounts",
+    )
+    group.add_argument(
+        "-u",
+        "--update",
         action="store",
         nargs="?",
-        metavar="profiles",
-        const="profiles",
-        help="Show configuration (e.g. list of profiles)",
+        const="__all__",
+        help="Get latest data",
     )
 
     # optional arguments
@@ -94,18 +89,10 @@ def cli_main(cli_args: List[str]) -> int:
         help="Select a profile to use. If left empty, lists configured profiles",
     )
     parser.add_argument(
-        "-u",
-        "--update",
-        action="store",
-        nargs="?",
-        const="latest",
-        help="Get latest data",
-    )
-    parser.add_argument(
         "-l",
         "--limit",
         action="store",
-        default=40,
+        default=400,
         type=int,
         help="Limit number of toots. Defaults to 40 -- 1 API-call",
     )
@@ -115,48 +102,42 @@ def cli_main(cli_args: List[str]) -> int:
     if args.web:
         # run as webserver
         app_main()
-
+        return 0
     elif args.configure:
-        response_status = profile_update(name=args.profile)
-        if response_status == 0:
-            sys.stdout.write(f"Saved profile '{args.profile}' succesfully\n")
-        else:
-            sys.stderr.write(f"Error saving profile '{args.profile}'\n")
-        return response_status
-
-    elif args.show:
-        action = args.show.lower()
-        if action == "profiles":
-            sys.stdout.write("Profiles available:\n")
-            sys.stdout.write(json.dumps(profile_list(), indent=4, default=str) + "\n")
-            return 0
-        else:
-            sys.stderr.write(parser.format_help())
+        account_name = args.configure.lower()
+        if "@" not in account_name:
+            sys.stderr.write(f"Invalid AccountName: {account_name}")
             return 1
-    else:
-        login = profile_login(args.profile)
-        if login is None:
-            sys.stderr.write(f"Cant get access token for profile: {args.profile}\n")
-            return 1
+        status = account_update(account_name)
+        if status == 0:
+            sys.stdout.write("Account configuration complete.\n")
+        return status
+    elif args.accounts:
+        sys.stdout.write("Accounts configured:\n")
+        sys.stdout.write(json.dumps(account_list(), indent=4, default=str) + "\n")
+        return 0
+    elif args.update:
 
-        base_url = f'https://{login["server"]}/api/v1/timelines/home'
-        if args.update:
-            return get_toots(
+        if args.update == "__all__":
+            login_names = [acct["name"] for acct in account_list()]
+        else:
+            login_names = [args.update]
+
+        for name in login_names:
+            login = account_login(name)
+            if login is None:
+                sys.stderr.write(f"Cant get access token for account: {args.profile}\n")
+                continue
+
+            base_url = f'https://{login["server"]}/api/v1/timelines/home'
+            status = get_toots(
                 base_url,
                 login["access_token"],
-                args.update,
                 args.limit,
             )
-        else:
-            pass
-            # toots = read_parquet(url_to_keyname(base_url), args.limit)
-            # for toot in toots:
-            #     sys.stdout.write(
-            #         "\n".join(
-            #             [
-            #                 f"{datetime.fromtimestamp(toot.created_at).isoformat()} {toot.acct}",
-            #                 toot.content[0:600],
-            #             ]
-            #         )
-            #         + "\n\n"
-            #     )
+            if status != 0:
+                return status
+        return 0
+    else:
+        sys.stderr.write(parser.format_help())
+        return 1

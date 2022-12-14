@@ -51,7 +51,6 @@ def parse_toot_item(toot_dict: Dict[str, Any]) -> Optional[TootItem]:
         item = toot_dict
         kwargs = {}
 
-
     # "columnize" key toot items to enable efficient re-indexing/ searching.
     # only store data required to show home lineline
     # id should always be from original toot
@@ -66,9 +65,7 @@ def parse_toot_item(toot_dict: Dict[str, Any]) -> Optional[TootItem]:
         favourites_count=int(item["favourites_count"]),
         content=item["content"],
         in_reply_to_id=(
-            lambda: int(item["in_reply_to_id"])
-            if item["in_reply_to_id"]
-            else None
+            lambda: int(item["in_reply_to_id"]) if item["in_reply_to_id"] else None
         )(),
         media_attachments=(
             lambda: json.dumps(item["media_attachments"], default=str)
@@ -158,8 +155,8 @@ def http_get_toots(
         next_link = response.headers.get("Link", "").split(";", 1)[0].strip("<>")
         max_id_search = re.search("max_id=[0-9]*", next_link)
         if not max_id_search:
-            logger.debug(f"Link does not contain max_id")
-            logger.debug( response.headers )
+            logger.debug("Link does not contain max_id")
+            logger.debug(response.headers)
             break
         url_params["max_id"] = (
             re.search("max_id=[0-9]*", next_link).group().split("=", 1)[-1]

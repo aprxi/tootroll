@@ -10,11 +10,6 @@ except KeyError:
 
 SECRETS_DIR = f"{TOOTROLL_HOME}/.secrets"
 DATABASE_DIR = f"{TOOTROLL_HOME}/data"
-DEFAULT_SERVERS = [
-    "mastodon.cloud",
-    "mastodon.online",
-    "fosstodon.org",
-]
 
 
 def extract_hostname(url: str) -> str:
