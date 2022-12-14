@@ -3,25 +3,19 @@ import re
 import sys
 import json
 
-from json.decoder import JSONDecodeError
 from typing import Dict, List, Optional
 
 from .oauth import verify_credentials
 from .utils import write_secrets_file, read_file
-from .vars import TOOTROLL_HOME, SECRETS_DIR
+from .vars import TOOTROLL_HOME
 
 
-def profile_save(profile: Dict[str, str], access_token: str) -> int:
+def account_save(profile: Dict[str, str], access_token: str) -> int:
 
-    os.makedirs(SECRETS_DIR, exist_ok=True)
-    token_file = f'{SECRETS_DIR}/{profile["token_file"]}'
-
+    account_dir = f'{TOOTROLL_HOME}/{profile["name"]}'
+    os.makedirs(account_dir, exist_ok=True)
+    token_file = f"{account_dir}/.access_token"
     write_secrets_file(token_file, access_token.encode())
-
-    profile_file = f'{TOOTROLL_HOME}/{profile["name"]}.profile'
-    with open(profile_file, "w") as wfile:
-        wfile.write(json.dumps(profile, indent=4, default=str))
-    # successfully written files
     return 0
 
 
@@ -31,34 +25,35 @@ def account_list() -> List[Dict[str, str]]:
 
     accounts: List[Dict[str, str]] = list(
         [
-            json.loads(read_file(f"{TOOTROLL_HOME}/{fn}") or "{}")
-            for fn in os.listdir(TOOTROLL_HOME)
-            if re.match("^@[-a-zA-Z0-9_]*@[-a-zA-Z0-9_]*\\.[a-z]*\\.profile$", fn)
+            {"name": dn}
+            for dn in os.listdir(TOOTROLL_HOME)
+            if re.match("^@[-a-zA-Z0-9_]*@[-a-zA-Z0-9_]*\\.[a-z]*$", dn)
+            and os.path.isdir(f"{TOOTROLL_HOME}/{dn}")
         ]
     )
     return accounts
 
 
 def account_login(name: str) -> Optional[Dict[str, str]]:
-    profile_file = f"{TOOTROLL_HOME}/{name}.profile"
-    invalid_error = f"Profile '{name}' invalid. Run with '--configure' to update.\n"
+
+    invalid_error = f"Account '{name}' invalid. Run with '--configure' to update.\n"
+
+    account_dir = f"{TOOTROLL_HOME}/{name}"
+    if not os.path.isdir(account_dir):
+        sys.stderr.write(invalid_error)
+        return None
+
+    token_file = f"{account_dir}/.access_token"
+    _, host_server = name.rsplit("@", 1)
+
+    profile = {"server": host_server}
 
     try:
-        contents = read_file(profile_file)
-        assert isinstance(contents, str)
-        profile: Dict[str, str] = json.loads(contents)
-        access_token = read_file(f'{SECRETS_DIR}/{profile["token_file"]}')
+        access_token = read_file(token_file)
         assert isinstance(access_token, str)
         assert access_token != ""
         profile["access_token"] = access_token
-        del profile["token_file"]
-    except KeyError:
-        sys.stderr.write(invalid_error)
-        return None
     except AssertionError:
-        sys.stderr.write(invalid_error)
-        return None
-    except JSONDecodeError:
         sys.stderr.write(invalid_error)
         return None
     return profile
@@ -102,12 +97,11 @@ def account_update(name: str, access_token: Optional[str] = None) -> int:
         # return -- verify_credentials() writes to stderr
         return 2
 
-    return profile_save(
+    return account_save(
         profile={
             "name": name,
             "server": host_server,
             "access_type": "private",
-            "token_file": f"{name}_token.secret",
         },
         access_token=access_token,
     )

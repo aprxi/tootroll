@@ -9,7 +9,7 @@ from .accounts import account_update, account_login, account_list
 from .timeline import http_get_toots
 from .utils import configure_logger
 from .db.parquet import ParquetWriter
-from .vars import extract_hostname
+from .vars import extract_hostname, TOOTROLL_HOME
 from .http.api import app_main
 
 
@@ -22,6 +22,7 @@ class CustomArgParser(argparse.ArgumentParser):
 
 def get_toots(
     base_url: str,
+    database_path: str,
     access_token: str,
     limit: int,
 ) -> int:
@@ -29,7 +30,7 @@ def get_toots(
         "local": "false",
     }
 
-    writer = ParquetWriter(f"{extract_hostname(base_url)}/home", limit)
+    writer = ParquetWriter(database_path, f"{extract_hostname(base_url)}/home", limit)
 
     http_get_toots(
         base_url,
@@ -132,6 +133,7 @@ def cli_main(cli_args: List[str]) -> int:
             base_url = f'https://{login["server"]}/api/v1/timelines/home'
             status = get_toots(
                 base_url,
+                f"{TOOTROLL_HOME}/{name}/db",
                 login["access_token"],
                 args.limit,
             )

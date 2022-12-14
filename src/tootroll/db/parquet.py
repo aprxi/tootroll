@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from ..timeline import TootItem
-from ..vars import DATABASE_DIR
+# from ..vars import DATABASE_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -44,35 +44,35 @@ def write_parquet(filepath: str, table) -> None:
     os.rename(tempfile, filepath)
 
 
-def read_parquet(database_name: str, limit: int) -> List[TootItem]:
+# def read_parquet(database_name: str, limit: int) -> List[TootItem]:
 
-    parquet_dir = f"{DATABASE_DIR}/{database_name}.parquet"
-    parquet_file = f'{parquet_dir}\
-/date={datetime.now().strftime("%Y%m%d")}/file-0.parquet'
+#     parquet_dir = f"{DATABASE_DIR}/{database_name}.parquet"
+#     parquet_file = f'{parquet_dir}\
+# /date={datetime.now().strftime("%Y%m%d")}/file-0.parquet'
 
-    if not os.path.exists(parquet_file):
-        return None
+#     if not os.path.exists(parquet_file):
+#         return None
 
-    pq_str = f"{parquet_dir}/*/*"
+#     pq_str = f"{parquet_dir}/*/*"
 
-    # retrieve the items again
-    con = duckdb.connect(database=":memory:")
-    con.execute(
-        f"SELECT * FROM read_parquet('{pq_str}') ORDER BY created_at DESC LIMIT {limit}"
-    )
-
-    return list([TootItem(*item) for item in con.fetchall()])
+#     # retrieve the items again
+#     con = duckdb.connect(database=":memory:")
+#     con.execute(
+#         f"SELECT * FROM read_parquet('{pq_str}') ORDER BY created_at DESC LIMIT {limit}"
+#     )
+#     return list([TootItem(*item) for item in con.fetchall()])
 
 
 class ParquetWriter:
     def __init__(
         self,
+        database_path: str,
         database_name: str,
         limit: int,
     ) -> None:
         self.last_ids: List[int] = []
 
-        self.parquet_dir = f"{DATABASE_DIR}/{database_name}.parquet"
+        self.parquet_dir = f"{database_path}/{database_name}.parquet"
         self.parquet_file = f'{self.parquet_dir}\
 /date={datetime.now().strftime("%Y%m%d")}/file-0.parquet'
 
