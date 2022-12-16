@@ -37,10 +37,12 @@ DATE=`date +%s`
 (( DATE /= $CRON_SECONDS, DATE *= 300, DATE += $CRON_OFFSET_SECONDS ))
 
 PROJECT_DIR="`dirname $0`/.."
-EXEC="$RUN_PREFIX python -m tootroll -u -l 800"
+EXEC="$RUN_PREFIX python -m tootroll fetch home -l 800"
 
 # run
-cd "$PROJECT_DIR"/src && \
-    STATS=`$EXEC |sed 's/[_a-z=]*//g'` && \
-    echo $DATE,$STATS || exit_on_fail "run failed, exiting..."
+cd "$PROJECT_DIR"/src || exit_on_fail "cant cd into ${PROJECT_DIR}/src, exiting..."
+logs=`$EXEC` || exit_on_fail "run failed, exiting..."
+for line in $logs;do
+    echo "$DATE,$line";
+done
 exit 0

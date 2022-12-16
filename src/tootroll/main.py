@@ -9,7 +9,7 @@ from .accounts import account_update, account_login, account_list
 from .timeline import http_get_toots
 from .utils import configure_logger
 from .db.parquet import ParquetWriter
-from .vars import extract_hostname, TOOTROLL_HOME
+from .vars import TOOTROLL_HOME
 from .http.api import app_main
 
 
@@ -21,8 +21,8 @@ class CustomArgParser(argparse.ArgumentParser):
 
 
 def get_toots(
+    name: str,
     base_url: str,
-    database_path: str,
     access_token: str,
     limit: int,
 ) -> int:
@@ -30,8 +30,8 @@ def get_toots(
         "local": "false",
     }
 
-    writer = ParquetWriter(database_path, f"{extract_hostname(base_url)}/home", limit)
-
+    database_path = f"{TOOTROLL_HOME}/{name}/timeline"
+    writer = ParquetWriter(database_path, "home", limit)
     http_get_toots(
         base_url,
         access_token,
@@ -54,42 +54,27 @@ def cli_main(cli_args: List[str]) -> int:
     configure_logger(name=module_name, debug=(os.environ.get("DEBUG", "") != ""))
     parser = CustomArgParser(prog=module_name)
 
-    group = parser.add_mutually_exclusive_group(required=False)
-    group.add_argument(
-        "--web",
-        action="store_true",
-        help="Start webserver",
-    )
-    group.add_argument(
-        "--configure",
-        action="store",
+    subparsers = parser.add_subparsers(help="<sub-command> help", dest="command")
+
+    # configure
+    parser_configure = subparsers.add_parser("configure", help="Configure accounts")
+    parser_configure.add_argument(
+        "account",
         nargs="?",
-        metavar="ACCOUNT",
-        const="@",
-        help="Create or update a profile",
-    )
-    group.add_argument(
-        "--accounts",
-        action="store_true",
-        help="List accounts",
-    )
-    group.add_argument(
-        "-u",
-        "--update",
-        action="store",
-        nargs="?",
-        const="__all__",
-        help="Get latest data",
+        default="@",
+        help="Create (or update) an account. Defaults to all accounts"
     )
 
-    # optional arguments
-    parser.add_argument(
-        "--profile",
-        action="store",
-        default="default",
-        help="Select a profile to use. If left empty, lists configured profiles",
+    # fetch
+    parser_fetch = subparsers.add_parser("fetch", help="Fetch new toots")
+    parser_fetch.add_argument("timeline", help="Select timeline")
+    parser_fetch.add_argument(
+        "account",
+        nargs="?",
+        help="Specify account. Defaults to all accounts"
     )
-    parser.add_argument(
+    # optional arguments
+    parser_fetch.add_argument(
         "-l",
         "--limit",
         action="store",
@@ -98,14 +83,22 @@ def cli_main(cli_args: List[str]) -> int:
         help="Limit number of toots. Defaults to 40 -- 1 API-call",
     )
 
+    # show
+    parser_show = subparsers.add_parser("show", help="Show configuration")
+    parser_show.add_argument("configuration", help="Show configuration type")
+
+    # web
+    parser_web = subparsers.add_parser("web", help="Run webserver")
+    parser_web.add_argument("--run", action="store_true", help="Start webserver")
+
     args = parser.parse_args(args=cli_args)
 
-    if args.web:
+    if args.command == "web":
         # run as webserver
         app_main()
         return 0
-    elif args.configure:
-        account_name = args.configure.lower()
+    elif args.command == "configure":
+        account_name = args.account.lower()
         if "@" not in account_name:
             sys.stderr.write(f"Invalid AccountName: {account_name}")
             return 1
@@ -113,33 +106,40 @@ def cli_main(cli_args: List[str]) -> int:
         if status == 0:
             sys.stdout.write("Account configuration complete.\n")
         return status
-    elif args.accounts:
-        sys.stdout.write("Accounts configured:\n")
-        sys.stdout.write(json.dumps(account_list(), indent=4, default=str) + "\n")
-        return 0
-    elif args.update:
-
-        if args.update == "__all__":
-            login_names = [acct["name"] for acct in account_list()]
+    elif args.command == "show":
+        if args.configuration == "accounts":
+            sys.stdout.write("Accounts configured:\n")
+            sys.stdout.write(json.dumps(account_list(), indent=4, default=str) + "\n")
         else:
-            login_names = [args.update]
-
-        for name in login_names:
-            login = account_login(name)
-            if login is None:
-                sys.stderr.write(f"Cant get access token for account: {args.profile}\n")
-                continue
-
-            base_url = f'https://{login["server"]}/api/v1/timelines/home'
-            status = get_toots(
-                base_url,
-                f"{TOOTROLL_HOME}/{name}/db",
-                login["access_token"],
-                args.limit,
-            )
-            if status != 0:
-                return status
+            sys.stderr.write(parser.format_help())
+            return 1
         return 0
+    elif args.command == "fetch":
+        if args.timeline == "home":
+            if not args.account:
+                login_names = [acct["name"] for acct in account_list()]
+            else:
+                login_names = [args.account]
+
+            for name in login_names:
+                login = account_login(name)
+                if login is None:
+                    sys.stderr.write(f"No access token for account: {name}\n")
+                    continue
+
+                base_url = f'https://{login["server"]}/api/v1/timelines/home'
+                status = get_toots(
+                    name,
+                    base_url,
+                    login["access_token"],
+                    args.limit,
+                )
+                if status != 0:
+                    return status
+            return 0
+        else:
+            sys.stderr.write(f"Unknown timeline: {args.timeline}\n")
+            return
     else:
         sys.stderr.write(parser.format_help())
         return 1

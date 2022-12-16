@@ -9,7 +9,6 @@ from datetime import datetime
 from typing import List, Optional
 
 from ..timeline import TootItem
-# from ..vars import DATABASE_DIR
 
 logger = logging.getLogger(__name__)
 

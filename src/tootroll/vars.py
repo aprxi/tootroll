@@ -10,7 +10,3 @@ except KeyError:
 
 SECRETS_DIR = f"{TOOTROLL_HOME}/.secrets"
 DATABASE_DIR = f"{TOOTROLL_HOME}/data"
-
-
-def extract_hostname(url: str) -> str:
-    return re.sub(".*://|:.*|/.*", "", url)
