@@ -8,7 +8,8 @@ from dataclasses import astuple
 from datetime import datetime
 from typing import List, Optional
 
-from ..timeline import TootItem
+from .utils import list_partitions_by_date
+from ..vars import TootItem
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,38 @@ def write_parquet(filepath: str, table) -> None:
 #         f"SELECT * FROM read_parquet('{pq_str}') ORDER BY created_at DESC LIMIT {limit}"
 #     )
 #     return list([TootItem(*item) for item in con.fetchall()])
+
+
+class ParquetReader:
+    def __init__(
+        self,
+        database_path: str,
+        database_name: str,
+        dates: Optional[tuple[str, str]] = None,
+        limit: Optional[int] = None,
+    ) -> None:
+
+        self.parquet_dir = f"{database_path}/{database_name}.parquet"
+
+        if dates:
+            start_date, end_date = dates
+            partitions = \
+                list_partitions_by_date(self.parquet_dir, start_date, end_date)
+            self.parquet_files = [
+                f"{self.parquet_dir}/{p}/*"
+                for p in partitions
+            ]
+
+        else:
+            self.parquet_files = f"{self.parquet_dir}/*/*"
+
+        self.con = duckdb.connect(database=":memory:")
+        self.limit = limit
+
+    def demo(self):
+        self.con.execute(f"SELECT * FROM read_parquet('{self.parquet_files}')")
+        items = self.con.fetchall()
+        logger.debug(f"total items={len(items)},unique={len(set(items))}\n")
 
 
 class ParquetWriter:

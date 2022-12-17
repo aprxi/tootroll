@@ -1,6 +1,7 @@
 import os
 import re
 
+from datetime import datetime, timedelta
 from typing import List, Set, Optional
 
 from ..vars import DATABASE_DIR
@@ -48,3 +49,26 @@ def list_by_partition(
         )
 
     return parquet_files
+
+
+def list_partitions_by_date(parquet_dir: str, start_date: str, end_date: str) -> List[str]:
+    start_date_dt = datetime.strptime(start_date, "%Y-%m-%d")
+    end_date_dt = datetime.strptime(end_date, "%Y-%m-%d")
+    delta = end_date_dt - start_date_dt
+
+    partitions_found = sorted([
+        fn
+        for fn in os.listdir(parquet_dir)
+        if re.match("^date=[0-9]{8}$", fn)
+        and os.path.isdir(f"{parquet_dir}/{fn}")
+    ])
+    partition_dates_gen = (
+        (start_date_dt + timedelta(days=i)).strftime("date=%Y%m%d")
+        for i in range(delta.days + 1)
+    )
+
+    return list([
+        p_date_str
+        for p_date_str in partition_dates_gen
+        if p_date_str in partitions_found
+    ])

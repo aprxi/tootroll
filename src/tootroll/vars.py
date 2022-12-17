@@ -1,5 +1,6 @@
 import os
-import re
+from dataclasses import dataclass
+from typing import Optional
 
 MODULE_NAME = __name__.split(".", 1)[0]
 
@@ -10,3 +11,20 @@ except KeyError:
 
 SECRETS_DIR = f"{TOOTROLL_HOME}/.secrets"
 DATABASE_DIR = f"{TOOTROLL_HOME}/data"
+
+
+@dataclass
+class TootItem:
+    id: int
+    acct: str
+    avatar: str
+    created_at: int
+    url: str
+    replies_count: int
+    reblogs_count: int
+    favourites_count: int
+    content: str
+    in_reply_to_id: Optional[int] = None
+    media_attachments: Optional[str] = None
+    ref_acct: Optional[str] = None
+    ref_created_at: Optional[int] = None
