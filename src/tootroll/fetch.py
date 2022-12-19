@@ -5,12 +5,12 @@ import logging
 import requests  # type: ignore
 
 from json.decoder import JSONDecodeError
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, List, Tuple, Any
 
 from .db.parquet import ParquetWriter
 from .oauth import check_rate_limits
-from .utils import iso8601_to_timestamp
-from .vars import TootItem
+from .toot import TootItem, parse_toot_dict
+
 
 logger = logging.getLogger(__name__)
 
@@ -18,48 +18,6 @@ logger = logging.getLogger(__name__)
 # note: most servers apply max limit of 40
 TOOTS_PER_REQUEST = 40
 
-
-
-def parse_toot_item(toot_dict: Dict[str, Any]) -> Optional[TootItem]:
-
-    if isinstance(toot_dict["reblog"], dict):
-        # reblog
-        # copy values from reblog
-        item = toot_dict["reblog"]
-        # define ref_ params
-        kwargs = {
-            "ref_acct": toot_dict["account"]["acct"],
-            "ref_created_at": iso8601_to_timestamp(toot_dict["created_at"]),
-        }
-    else:
-        # regular blog
-        item = toot_dict
-        kwargs = {}
-
-    # "columnize" key toot items to enable efficient re-indexing/ searching.
-    # only store data required to show home lineline
-    # id should always be from original toot
-    toot_item = TootItem(
-        id=int(toot_dict["id"]),
-        acct=item["account"]["acct"],
-        avatar=item["account"]["avatar"],
-        created_at=iso8601_to_timestamp(item["created_at"]),
-        url=item["url"],
-        replies_count=int(item["replies_count"]),
-        reblogs_count=int(item["reblogs_count"]),
-        favourites_count=int(item["favourites_count"]),
-        content=item["content"],
-        in_reply_to_id=(
-            lambda: int(item["in_reply_to_id"]) if item["in_reply_to_id"] else None
-        )(),
-        media_attachments=(
-            lambda: json.dumps(item["media_attachments"], default=str)
-            if item["media_attachments"]
-            else None
-        )(),
-        **kwargs,
-    )
-    return toot_item
 
 
 def calculate_request_limits(max_toots: int) -> Tuple[int, int]:
@@ -116,7 +74,7 @@ def http_fetch_toots(
         )
 
         try:
-            toots = [parse_toot_item(td) for td in json.loads(response.content)]
+            toots = [parse_toot_dict(td) for td in json.loads(response.content)]
             toots_received = len(toots)  # count before filtering out un-parsable
             toots: List[TootItem] = list(filter(lambda item: item is not None, toots))
             logger.debug(f"TootsReceived={toots_received},TootsValid={len(toots)}")

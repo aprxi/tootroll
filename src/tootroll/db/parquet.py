@@ -6,10 +6,10 @@ import pyarrow.parquet as pq
 
 from dataclasses import astuple
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Dict, Tuple, Optional, Any
 
 from .utils import list_partitions_by_date
-from ..vars import TootItem
+from ..toot import TootItem
 
 logger = logging.getLogger(__name__)
 
@@ -44,44 +44,27 @@ def write_parquet(filepath: str, table) -> None:
     os.rename(tempfile, filepath)
 
 
-# def read_parquet(database_name: str, limit: int) -> List[TootItem]:
-
-#     parquet_dir = f"{DATABASE_DIR}/{database_name}.parquet"
-#     parquet_file = f'{parquet_dir}\
-# /date={datetime.now().strftime("%Y%m%d")}/file-0.parquet'
-
-#     if not os.path.exists(parquet_file):
-#         return None
-
-#     pq_str = f"{parquet_dir}/*/*"
-
-#     # retrieve the items again
-#     con = duckdb.connect(database=":memory:")
-#     con.execute(
-#         f"SELECT * FROM read_parquet('{pq_str}') ORDER BY created_at DESC LIMIT {limit}"
-#     )
-#     return list([TootItem(*item) for item in con.fetchall()])
-
-
 class ParquetReader:
     def __init__(
         self,
         database_path: str,
         database_name: str,
-        dates: Optional[tuple[str, str]] = None,
+        dates: Optional[Tuple[str, str]] = None,
         limit: Optional[int] = None,
     ) -> None:
 
+        self.parquet_files = None
         self.parquet_dir = f"{database_path}/{database_name}.parquet"
 
         if dates:
             start_date, end_date = dates
             partitions = \
                 list_partitions_by_date(self.parquet_dir, start_date, end_date)
-            self.parquet_files = [
-                f"{self.parquet_dir}/{p}/*"
-                for p in partitions
-            ]
+            if partitions:
+                self.parquet_files = "','".join([
+                    f"{self.parquet_dir}/{p}/*"
+                    for p in partitions
+                ])
 
         else:
             self.parquet_files = f"{self.parquet_dir}/*/*"
@@ -89,10 +72,21 @@ class ParquetReader:
         self.con = duckdb.connect(database=":memory:")
         self.limit = limit
 
-    def demo(self):
-        self.con.execute(f"SELECT * FROM read_parquet('{self.parquet_files}')")
-        items = self.con.fetchall()
-        logger.debug(f"total items={len(items)},unique={len(set(items))}\n")
+
+    def schema(self) -> Dict[str, str]:
+        if not self.parquet_files:
+            return {}
+        self.con.execute(f"DESCRIBE SELECT * FROM read_parquet(['{self.parquet_files}'])")
+        return {
+            col_name: col_type
+            for col_name, col_type, *_ in self.con.fetchall()
+        }
+
+    def get(self) -> Tuple[Tuple[Any]]:
+        if not self.parquet_files:
+            return []
+        self.con.execute(f"SELECT * FROM read_parquet(['{self.parquet_files}'])")
+        return tuple(self.con.fetchall())
 
 
 class ParquetWriter:

@@ -13,6 +13,7 @@ from .utils import configure_logger
 from .http.api import app_main
 from .vars import TOOTROLL_HOME
 
+
 class CustomArgParser(argparse.ArgumentParser):
     def error(self, message: str) -> NoReturn:
         sys.stderr.write(f"error: {message}\n")
