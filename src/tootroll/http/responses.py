@@ -7,7 +7,7 @@ from fastapi.responses import Response, HTMLResponse
 
 from typing import Dict, List, Tuple, Optional, Any
 
-from ..vars import DATABASE_DIR
+from ..vars import TOOTROLL_HOME
 
 HTML_DIR = f"{os.path.dirname(__file__)}/html"
 
@@ -49,8 +49,9 @@ def validate_http_request_range(input_range: str, filesize: int) -> Tuple[int, i
 
 
 def path_url_to_file(url_path: str) -> Tuple[str, str]:
-    if re.match("^db/.*/.*\\.parquet/.*/.*\\.parquet", url_path):
-        file_path = f'{DATABASE_DIR}/{url_path.split("db/", 1)[-1]}'
+
+    if re.match("^db/[-a-z0-9]*/.*\\.parquet/.*/.*\\.parquet", url_path):
+        file_path = f'{TOOTROLL_HOME}/{url_path.split("db/", 1)[-1]}'
         content_type = "application/octet-stream"
     else:
         file_path = f"{HTML_DIR}/{url_path}"

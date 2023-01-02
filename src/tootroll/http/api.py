@@ -16,7 +16,7 @@ from .responses import (
     static_file_get_response,
 )
 from ..db.utils import list_by_partition
-from ..vars import DATABASE_DIR
+from ..vars import TOOTROLL_HOME
 
 
 API_PREFIX = "/api/v1"
@@ -43,74 +43,83 @@ async def alive() -> Response:
     return json_response(response)
 
 
-@api.get("/servers")
-async def list_servers() -> Response:
+@api.get("/feeds")
+async def list_feeds(request: Request) -> Response:
     """List available servers to client"""
-    response = {"Servers": []}
+    response = {"Feeds": []}
+
+    username = request.headers.get("UserId", None)
+    if not username:
+        return empty_response(403)
 
     try:
-        response["Servers"] = os.listdir(DATABASE_DIR)
+        database_dir = f"{TOOTROLL_HOME}/{username}/feed"
+        response["Feeds"] = os.listdir(database_dir)
     except NotADirectoryError:
         # log as warning on server only -- for client this is not an error
-        logger.warning(f"DATABASE_DIR '{DATABASE_DIR}' not a directory")
+        logger.warning(f"DATABASE_DIR '{database_dir}' not a directory")
     except FileNotFoundError:
         # log as warning on server only -- for client this is not an error
-        logger.warning(f"DATABASE_DIR '{DATABASE_DIR}' does not exist")
+        logger.warning(f"DATABASE_DIR '{database_dir}' does not exist")
 
     return json_response(response, status_code=200)
 
 
-@api.get("/servers/{server}")
-async def list_server_databases(server: str) -> Response:
-    """list all (multi-file) .parquet files for the given server"""
-    response = {"Databases": []}
+# @api.get("/feeds/{feed}")
+# async def list_server_databases(feed: str) -> Response:
+#     """list all (multi-file) .parquet files for the given server"""
+#     response = {"Databases": []}
 
-    try:
-        directory = f"{DATABASE_DIR}/{server}"
-        response["Databases"] = list(
-            [
-                fname
-                for fname in os.listdir(directory)
-                if re.match(".*\\.parquet$", fname)
-                and os.path.isdir(f"{directory}/{fname}")
-            ]
-        )
-        return json_response(response)
-    except NotADirectoryError:
-        return empty_response(404)
-    except FileNotFoundError:
-        return empty_response(404)
-
-
-@api.get("/servers/{server}/{database}")
-async def list_database_partitions(server: str, database: str) -> Response:
-
-    response = {"Partitions": []}
-
-    try:
-        directory = f"{DATABASE_DIR}/{server}/{database}"
-        response["Partitions"] = list(
-            [
-                fname
-                for fname in os.listdir(directory)
-                if re.match("^\w*=\w*$", fname)
-                and os.path.isdir(f"{directory}/{fname}")
-            ]
-        )
-        return json_response(response)
-    except NotADirectoryError:
-        return empty_response(404)
-    except FileNotFoundError:
-        return empty_response(404)
+#     try:
+#         directory = f"{DATABASE_DIR}/{server}"
+#         response["Databases"] = list(
+#             [
+#                 fname
+#                 for fname in os.listdir(directory)
+#                 if re.match(".*\\.parquet$", fname)
+#                 and os.path.isdir(f"{directory}/{fname}")
+#             ]
+#         )
+#         return json_response(response)
+#     except NotADirectoryError:
+#         return empty_response(404)
+#     except FileNotFoundError:
+#         return empty_response(404)
 
 
-@api.get("/servers/{server}/{database}/files")
+# @api.get("/feeds/{feed}")
+# async def list_database_partitions(feed: str) -> Response:
+
+#     response = {"Partitions": []}
+
+#     try:
+#         directory = f"{DATABASE_DIR}/{server}/{database}"
+#         response["Partitions"] = list(
+#             [
+#                 fname
+#                 for fname in os.listdir(directory)
+#                 if re.match("^\w*=\w*$", fname)
+#                 and os.path.isdir(f"{directory}/{fname}")
+#             ]
+#         )
+#         return json_response(response)
+#     except NotADirectoryError:
+#         return empty_response(404)
+#     except FileNotFoundError:
+#         return empty_response(404)
+
+
+@api.get("/feeds/{feed}/files")
 async def list_partition_files(
-    server: str,
-    database: str,
+    feed: str,
+    request: Request,
     partition_key: Optional[str] = None,
     partition_values: Optional[str] = None,
 ) -> Response:
+
+    username = request.headers.get("UserId", None)
+    if not username:
+        return empty_response(403)
 
     if partition_key:
         if partition_values:
@@ -119,8 +128,8 @@ async def list_partition_files(
             partition_values_filter = None
 
         partition_values = list_by_partition(
-            server,
-            database,
+            username,
+            feed,
             partition_key,
             partition_values_filter=partition_values_filter,
         )
@@ -129,7 +138,7 @@ async def list_partition_files(
         return empty_response(400)
 
     response = {
-        "Path": f"http://localhost:5000/db/{server}/{database}",
+        "Path": f"http://localhost:5000/db/temp/{feed}",
         "Files": partition_values,
     }
 
@@ -199,15 +208,14 @@ async def websocket_endpoint(websocket: WebSocket):
 # catch any other file in non-API_PREFIX path
 @static.head("/{url_path:path}", response_class=HTMLResponse)
 async def static_file_head(url_path: str, request: Request) -> HTMLResponse:
-    # print( json.dumps(request.headers, indent=4, default=str))
     return static_file_head_response(
-        url_path, range_request=request.headers.get("Range", None)
+        url_path,
+        range_request=request.headers.get("Range", None)
     )
 
 
 @static.get("/{url_path:path}", response_class=HTMLResponse)
 async def static_file_get(url_path: str, request: Request) -> HTMLResponse:
-    # print( json.dumps(request.headers, indent=4, default=str))
     return static_file_get_response(
         url_path, range_request=request.headers.get("Range", None)
     )

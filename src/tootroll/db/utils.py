@@ -6,25 +6,27 @@ from datetime import datetime, timedelta
 from typing import List, Set, Optional
 
 from ..toot import TootItem
-from ..vars import DATABASE_DIR
+from ..vars import TOOTROLL_HOME
 
 
 def list_by_partition(
-    server: str,
-    database: str,
+    username: str,
+    feed: str,
     partition_key: str,
     partition_values_filter: Optional[Set[str]] = None,
 ) -> Optional[List[str]]:
-    directory = f"{DATABASE_DIR}/{server}/{database}"
-    if not os.path.isdir(directory):
+
+    database_dir = f"{TOOTROLL_HOME}/{username}/feed/{feed}"
+
+    if not os.path.isdir(database_dir):
         return None
 
     partition_values = list(
         [
             fname.split("=", 1)[1]
-            for fname in os.listdir(directory)
+            for fname in os.listdir(database_dir)
             if re.match(f"^{partition_key}=.", fname)
-            and os.path.isdir(f"{directory}/{fname}")
+            and os.path.isdir(f"{database_dir}/{fname}")
         ]
     )
 
@@ -39,7 +41,7 @@ def list_by_partition(
 
     parquet_files = []
     for pv in sorted(partition_values):
-        pv_directory = f"{directory}/{partition_key}={pv}"
+        pv_directory = f"{database_dir}/{partition_key}={pv}"
 
         parquet_files += list(
             [

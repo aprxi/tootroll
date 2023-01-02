@@ -94,7 +94,6 @@ class ParquetWriter:
         self,
         database_path: str,
         database_name: str,
-        limit: int,
     ) -> None:
         self.last_ids: List[int] = []
 

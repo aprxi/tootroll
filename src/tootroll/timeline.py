@@ -1,7 +1,7 @@
 from functools import partial
-from typing import Tuple
-
 from datetime import datetime
+
+from typing import List, Tuple
 
 from .toot import TootItem
 from .nlp.html_text import extract_text
@@ -50,23 +50,24 @@ def toot_popularity(toot: TootItem, current_time: int, time_handicap: bool = Tru
 
 def read_toots(
     source_path: str,
+    feed: str,
     dates: Tuple[str, str],
     limit: int,
-) -> int:
-
-    reader = ParquetReader(source_path, "home", dates=dates, limit=limit)
+) -> List[TootItem]:
+    reader = ParquetReader(source_path, feed, dates=dates, limit=limit)
 
     toots = dedup_toots(tuple(TootItem(*t) for t in reader.get()))
 
     # sort by popularity
     func = partial(toot_popularity, current_time=int(datetime.now().timestamp()))
-    toots_sorted = sorted(toots, key=func, reverse=True)    # [0:1000]
+    toots_sorted = sorted(toots, key=func, reverse=True)
     # de-duplicate toots (e.g. popular reblogs, we only need one)
 
-    for idx, pop in enumerate(toots_sorted):
-        print('-'*60)
-        print(idx, int(func(pop)), int(func(pop, time_handicap=False)), pop.url, datetime.fromtimestamp(pop.ref_created_at or pop.created_at))
-        print('-'*60)
-        print(extract_text(pop.content), "\n")
-
-    return 0
+    # print( len( toots_sorted ))
+    # print( toots_sorted[0 ])
+    return toots_sorted[:1000]
+    # for idx, pop in enumerate(toots_sorted):
+    #     print('-'*60)
+    #     print(idx, int(func(pop)), int(func(pop, time_handicap=False)), pop.url, datetime.fromtimestamp(pop.ref_created_at or pop.created_at))
+    #     print('-'*60)
+    #     print(extract_text(pop.content), "\n")

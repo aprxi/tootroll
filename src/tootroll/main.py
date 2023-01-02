@@ -9,6 +9,7 @@ from typing import List, NoReturn
 from .accounts import account_update, account_login, account_list
 from .fetch import fetch_toots
 from .timeline import read_toots
+from .db.sqlite import write_toots
 from .utils import configure_logger
 from .http.api import app_main
 from .vars import TOOTROLL_HOME
@@ -84,7 +85,7 @@ def cli_main(cli_args: List[str]) -> int:
         "-s",
         "--start",
         action="store",
-        default=(datetime.now() - timedelta(days=3)).strftime("%Y-%m-%d"),
+        default=(datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d"),
         type=str,
         help="Start date -- defaults to today - 3 days",
     )
@@ -125,10 +126,16 @@ def cli_main(cli_args: List[str]) -> int:
         if args.timeline == "default":
             # show timeline in chronological order
             for username in login_names:
-                read_toots(
+                toots = read_toots(
                     f"{TOOTROLL_HOME}/{username}/feed",
+                    "home",
                     (args.start, args.end),
                     args.limit,
+                )
+                write_toots(
+                    toots,
+                    f"{TOOTROLL_HOME}/{username}/timeline",
+                    "home",
                 )
             pass
 

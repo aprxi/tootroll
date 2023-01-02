@@ -8,4 +8,4 @@ except KeyError:
     TOOTROLL_HOME = f'{os.environ.get("HOME", ".")}/.{MODULE_NAME}'
 
 SECRETS_DIR = f"{TOOTROLL_HOME}/.secrets"
-DATABASE_DIR = f"{TOOTROLL_HOME}/data"
+# DATABASE_DIR = f"{TOOTROLL_HOME}/data"

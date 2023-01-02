@@ -122,7 +122,7 @@ def fetch_toots(
         "local": "false",
     }
 
-    writer = ParquetWriter(destination_path, "home", limit)
+    writer = ParquetWriter(destination_path, "home")
     http_fetch_toots(
         base_url,
         access_token,
